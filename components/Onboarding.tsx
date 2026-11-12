@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowRight, Check, Moon, Sun, Landmark, Lock, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Loader2, Moon, Sun, Landmark, Lock, ShieldCheck, Sparkles } from "lucide-react";
 import type { Profile, Txn } from "@/lib/types";
 import { PlaidButton } from "./PlaidButton";
 
@@ -86,7 +86,7 @@ export function Landing({ onStart, onDemo, onSignIn, busy }: { onStart: () => vo
         <div className="rise mt-7 flex flex-col items-center gap-3">
           <button className="btn btn-primary min-w-[220px] !rounded-xl !py-3.5 text-base" onClick={onStart}>Get Started <ArrowRight size={16} /></button>
           <span className="text-xs text-zinc-500">Connects with your bank through Plaid, and with QuickBooks</span>
-          <button className="text-sm text-zinc-400 underline-offset-4 hover:text-white hover:underline" onClick={onDemo} disabled={busy}>{busy ? "Loading a live example…" : "or see a live example first"}</button>
+          <button className="inline-flex items-center gap-2 text-sm text-zinc-400 underline-offset-4 hover:text-white hover:underline" onClick={onDemo} disabled={busy} aria-busy={busy || undefined}>{busy ? <><Loader2 size={14} className="animate-spin motion-reduce:animate-none" aria-hidden />Loading a live example…</> : "or see a live example first"}</button>
         </div>
       </main>
       <div className="horizon pointer-events-none" aria-hidden />
@@ -213,19 +213,20 @@ export function Starfield() {
   return <canvas ref={ref} className="pointer-events-none fixed inset-0 h-full w-full" aria-hidden />;
 }
 
-function Shell({ children, step, onBack }: { children: React.ReactNode; step: number; onBack?: () => void }) {
+function Shell({ children, step, onBack, onHome }: { children: React.ReactNode; step: number; onBack?: () => void; onHome?: () => void }) {
   return (
     <div className="relative min-h-screen bg-black" style={pad}>
       <MoneyBackdrop />
       <div className="pointer-events-none fixed inset-x-0 top-0 h-[60vh]" style={{ background: "radial-gradient(60% 60% at 50% 0%, rgba(255,255,255,.08), transparent 70%)" }} />
       <header className="relative z-10 mx-auto flex max-w-6xl items-center justify-between py-5">
-        <button onClick={onBack}><Wordmark size={34} /></button>
+        <button onClick={onHome} aria-label="The Number, home"><Wordmark size={34} /></button>
         <div className="flex items-center gap-4"><ol className="flex items-center gap-2 text-xs font-medium text-zinc-500" aria-label="Setup progress">
           {["Account", "Plan", "Connect"].map((s, i) => (
             <li key={s} className="flex items-center gap-2"><span className={`grid h-6 w-6 place-items-center rounded-full border ${i < step ? "border-white bg-white text-black" : i === step ? "border-white text-white" : "border-zinc-700"}`}>{i < step ? <Check size={13} /> : i + 1}</span><span className={`hidden sm:inline ${i === step ? "text-white" : ""}`}>{s}</span>{i < 2 && <span className="mx-1 hidden h-px w-6 bg-zinc-700 sm:inline-block" />}</li>
           ))}
         </ol><ThemeToggle /></div>
       </header>
+      <div className="relative z-10 mx-auto max-w-6xl"><button className="btn btn-ghost !px-3.5 !py-2 text-sm" onClick={onBack}><ArrowLeft size={15} />Back</button></div>
       <div className="relative z-10">{children}</div>
     </div>
   );
@@ -235,8 +236,12 @@ function Shell({ children, step, onBack }: { children: React.ReactNode; step: nu
 
 export type Account = { name: string; email: string; business: string; plan?: string };
 
-export function SignUp({ onDone, onBack }: { onDone: (a: Account) => void; onBack: () => void }) {
-  const [name, setName] = useState(""), [email, setEmail] = useState(""), [business, setBusiness] = useState("Pressure washing");
+type Draft = { name: string; email: string; business: string };
+
+export function SignUp({ onDone, onBack, onHome, draft, onDraft }: { onDone: (a: Account) => void; onBack: () => void; onHome: () => void; draft: Draft; onDraft: (d: Draft) => void }) {
+  // What was typed is kept by the parent, so coming Back to this step shows it again.
+  const [name, setName] = useState(draft.name), [email, setEmail] = useState(draft.email), [business, setBusiness] = useState(draft.business);
+  useEffect(() => { onDraft({ name, email, business }); }, [name, email, business, onDraft]);
   const [err, setErr] = useState("");
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -246,7 +251,7 @@ export function SignUp({ onDone, onBack }: { onDone: (a: Account) => void; onBac
     onDone({ name: name.trim().split(" ")[0], email: email.trim(), business: business.trim() });
   };
   return (
-    <Shell step={0} onBack={onBack}>
+    <Shell step={0} onBack={onBack} onHome={onHome}>
       <div className="mx-auto grid max-w-5xl items-center gap-12 py-10 lg:grid-cols-2">
         <div className="hidden lg:block">
           <h1 className="headline font-display text-6xl font-semibold leading-[0.98]">Your money,<br />finally explained.</h1>
@@ -288,9 +293,9 @@ const PLANS = [
   { id: "season", name: "Season Pass", blurb: "One payment covers the whole tax year.", price: "$120", unit: "one-time · per tax year", popular: true, cta: "Start now", note: "No auto-renew. If it doesn't save you more than it costs, next season is on us." },
 ];
 
-export function Pricing({ onPick, onBack }: { name?: string; onPick: (plan: string) => void; onBack: () => void }) {
+export function Pricing({ onPick, onBack, onHome, current }: { name?: string; current?: string; onPick: (plan: string) => void; onBack: () => void; onHome: () => void }) {
   return (
-    <Shell step={1} onBack={onBack}>
+    <Shell step={1} onBack={onBack} onHome={onHome}>
       <div className="mx-auto max-w-4xl py-10 text-center">
         <span className="chip text-zinc-300">No subscriptions. Ever.</span>
         <h1 className="headline font-display mt-5 text-[clamp(2.4rem,6vw,4.25rem)] font-semibold leading-[1]">Pay once a tax year.</h1>
@@ -301,6 +306,7 @@ export function Pricing({ onPick, onBack }: { name?: string; onPick: (plan: stri
               {p.popular && <span className="absolute -top-4 left-1/2 flex -translate-x-1/2 items-center gap-1.5 whitespace-nowrap rounded-full bg-white px-4 py-1.5 text-sm font-semibold text-black">★ Most popular</span>}
               <div className="text-center">
                 <div className="font-display text-2xl font-semibold">{p.name}</div>
+                {current === p.id && <span className="chip mt-2 text-zinc-300"><Check size={13} />Your current pick</span>}
                 <div className="mt-1 text-sm text-zinc-400">{p.blurb}</div>
                 <div className="font-display num mt-6 text-6xl font-semibold">{p.price}</div>
                 <div className="mt-1 text-xs text-zinc-400">{p.unit}</div>
@@ -512,7 +518,7 @@ function PickSheet({ pick, onPick, onClose, busy }: { pick: Pick; onPick: (name:
 
 /* ---------------- Connect ---------------- */
 
-export function Connect({ onPlaidSandbox, onQuickBooksSandbox, onPlaid, busy, error, onBack }: { onPlaidSandbox: (bank: string) => void; onQuickBooksSandbox: (company: string) => void; onPlaid: (d: { txns: Txn[]; balances: Profile["balances"] }) => void; busy: string; error: string; onBack: () => void }) {
+export function Connect({ onPlaidSandbox, onQuickBooksSandbox, onPlaid, busy, error, onBack, onHome }: { onPlaidSandbox: (bank: string) => void; onQuickBooksSandbox: (company: string) => void; onPlaid: (d: { txns: Txn[]; balances: Profile["balances"] }) => void; busy: string; error: string; onBack: () => void; onHome: () => void }) {
   const [pick, setPick] = useState<Pick | null>(null);
   // The pop-up window tells us when the app is connected.
   useEffect(() => {
@@ -522,7 +528,7 @@ export function Connect({ onPlaidSandbox, onQuickBooksSandbox, onPlaid, busy, er
   }, [onPlaidSandbox]);
   const live = process.env.NEXT_PUBLIC_PLAID_ENV === "production";
   return (
-    <Shell step={2} onBack={onBack}>
+    <Shell step={2} onBack={onBack} onHome={onHome}>
       <div className="mx-auto max-w-3xl py-12 text-center">
         <span className="chip text-zinc-300">Last step</span>
         <h1 className="headline font-display mt-5 text-[clamp(2.4rem,6vw,4.25rem)] font-semibold leading-[1]">Connect your business.</h1>

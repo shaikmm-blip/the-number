@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, ArrowRight, Check, Lightbulb, Lock, ArrowUpRight, Bell, BookOpen, Briefcase, CalendarClock, Download, Eye, EyeOff, GraduationCap, Home as HomeIcon, Copy, Info, Landmark, LogOut, Octagon, Sparkles, Printer, ShoppingBag, Terminal, User, Users, Wallet, X, Zap } from "lucide-react";
+import { AlertTriangle, ArrowRight, Check, ChevronDown, Loader2, Lightbulb, Lock, ArrowUpRight, Bell, BookOpen, Briefcase, CalendarClock, Download, Eye, EyeOff, GraduationCap, Home as HomeIcon, Copy, Info, Landmark, LogOut, Octagon, Sparkles, Printer, ShoppingBag, Terminal, User, Users, Wallet, X, Zap } from "lucide-react";
 import { classify } from "@/lib/classify";
 import { latestBalance, normalize } from "@/lib/csv";
 import { DEMO_FILES, DEMO_PROFILE } from "@/lib/demo";
@@ -38,13 +38,46 @@ export default function App() {
   const setPref = (k: string, v: boolean) => setPrefs((p) => { const n = { ...p, [k]: v }; try { localStorage.setItem(PREFS_KEY, JSON.stringify(n)); } catch { /* fine */ } return n; });
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<string>("");
+  const [loadFail, setLoadFail] = useState(false);
+  const [draft, setDraft] = useState({ name: "", email: "", business: "Pressure washing" });
+  const loadSeq = useRef(0);
+  const retryLoad = useRef<() => void>(() => {});
+  const txnsRef = useRef<Txn[] | null>(null);
+  txnsRef.current = txns;
+  const planFromApp = useRef(false); // pricing was opened from inside the app ("Change plan"), not during setup
+  const wantLanding = useRef(false);
+  const lastFocus = useRef<HTMLElement | null>(null);
+
+  // Every step is a browser-history entry, so Back (ours or the browser's) moves one step inside the app.
+  const go = (next: Stage, replace = false) => {
+    planFromApp.current = next === "pricing" && stage === "app";
+    const i = (window.history.state?.i ?? 0) + (replace ? 0 : 1);
+    window.history[replace ? "replaceState" : "pushState"]({ ...window.history.state, tn: next, i, fromApp: planFromApp.current }, "");
+    setStage(next);
+  };
+  const back = () => { if ((window.history.state?.i ?? 0) > 0) window.history.back(); else go("landing", true); };
+  // Home returns to the first entry instead of adding one, so the browser's Back from landing still leaves the site.
+  const home = () => { const i = window.history.state?.i ?? 0; if (i > 0) { wantLanding.current = true; window.history.go(-i); } else go("landing", true); };
+  useEffect(() => {
+    window.history.replaceState({ ...window.history.state, tn: "landing", i: 0 }, "");
+    const pop = (e: PopStateEvent) => {
+      // Leaving a step cancels a load that is still running there, so it cannot pull the user forward again.
+      loadSeq.current++; setBusy((b) => (b === "bank" ? "" : b)); setLoadFail(false);
+      let s = (e.state?.tn as Stage) || "landing";
+      if (wantLanding.current) { wantLanding.current = false; if (s !== "landing") { window.history.replaceState({ ...window.history.state, tn: "landing" }, ""); s = "landing"; } }
+      planFromApp.current = s === "pricing" && !!e.state?.fromApp; // the history entry remembers where pricing was opened from
+      setStage(s === "app" && !txnsRef.current ? "landing" : s);
+    };
+    window.addEventListener("popstate", pop);
+    return () => window.removeEventListener("popstate", pop);
+  }, []);
 
   useEffect(() => { try { localStorage.removeItem(KEY); } catch { /* fine */ } }, []);
   // Back from QuickBooks: pull the Profit & Loss and open the dashboard.
   useEffect(() => {
     const q = new URLSearchParams(window.location.search).get("qbo");
     if (!q) return;
-    window.history.replaceState(null, "", "/");
+    window.history.replaceState({ ...window.history.state, tn: "connect", i: 0 }, "", "/");
     if (q !== "connected") { setError("QuickBooks wasn't connected. Try again."); setStage("connect"); return; }
     setStage("connect"); setBusy("qbo");
     fetch("/api/qbo/data").then(async (r) => {
@@ -58,15 +91,23 @@ export default function App() {
   useEffect(() => { window.scrollTo(0, 0); }, [stage, tab]);
   const result = useMemo(() => (txns ? computeNumber(txns, profile) : null), [txns, profile]);
 
-  function enter(note: string) { setSource(note); setTab("home"); setStage("app"); }
+  function enter(note: string) { loadSeq.current++; setBusy(""); setLoadFail(false); setSource(note); setTab("home"); go("app"); }
 
   async function loadSampleBank(bank = "your bank", via: "plaid" | "qbo" = "plaid") {
-    setBusy("bank"); setError("");
+    // One load at a time. A run that timed out or was retried is stale and must not change the screen.
+    const seq = ++loadSeq.current;
+    const current = () => loadSeq.current === seq;
+    retryLoad.current = () => loadSampleBank(bank, via);
+    const active = document.activeElement as HTMLElement | null;
+    if (active && !active.closest("[data-veil]")) lastFocus.current = active;
+    setBusy("bank"); setError(""); setLoadFail(false);
+    const timer = window.setTimeout(() => { if (current()) { loadSeq.current++; setBusy(""); setLoadFail(true); } }, 8000);
     const f = randomFactor();
     try {
       const r = await fetch("/api/plaid/demo", { method: "POST" });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error);
+      if (!current()) return;
       // Plaid sometimes hands back only the latest month on a brand-new test item. Need the whole year for an honest tax number.
       const first = (j.txns as Txn[]).reduce((m, t) => (t.date < m ? t.date : m), "9999");
       if ((j.txns as Txn[]).length < 120 || first > `${TAX_YEAR}-02-01`) throw new Error(`Plaid returned ${j.txns.length} transactions, not the full year yet`);
@@ -75,18 +116,21 @@ export default function App() {
     } catch (e) {
       // Plaid unreachable (Wi-Fi, keys): fall back to the same data from local files so the demo never breaks.
       console.warn("Plaid sample bank unavailable:", (e as Error).message);
-      await loadFiles("Full-year sample business", f);
-    } finally { setBusy(""); }
+      try { await loadFiles("Full-year sample business", f, current); }
+      catch (e2) { console.warn("Sample files unavailable:", (e2 as Error).message); if (current()) setLoadFail(true); }
+    } finally { window.clearTimeout(timer); if (current()) setBusy(""); }
   }
 
   async function sampleTxns() {
-    const texts = await Promise.all(DEMO_FILES.map((f) => fetch(f).then((r) => r.text())));
+    const texts = await Promise.all(DEMO_FILES.map((f) => fetch(f).then((r) => { if (!r.ok) throw new Error(`${f} returned ${r.status}`); return r.text(); })));
     return texts.flatMap((t, i) => normalize(t, DEMO_FILES[i])).map(classify);
   }
 
-  async function loadFiles(note?: string, f = randomFactor()) {
+  async function loadFiles(note?: string, f = randomFactor(), current: () => boolean = () => true) {
+    const sample = await sampleTxns();
+    if (!current()) return;
     setProfile(DEMO_PROFILE);
-    setTxns(scaleBusiness(await sampleTxns(), f));
+    setTxns(scaleBusiness(sample, f));
     enter(note || "Sample statements (Chase + Cash App + Venmo)");
   }
 
@@ -107,12 +151,16 @@ export default function App() {
   function notify(a: Alert) { setToast(a); window.setTimeout(() => setToast(null), 6500); }
   const clock = () => new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
 
-  function signOut() { setAccount(null); setTxns(null); setStage("landing"); }
+  function signOut() { setAccount(null); setTxns(null); setDraft({ name: "", email: "", business: "Pressure washing" }); home(); }
 
-  if (stage === "landing") return <Landing onStart={() => setStage("signup")} onSignIn={() => setStage("signup")} onDemo={() => loadSampleBank()} busy={busy === "bank"} />;
-  if (stage === "signup") return <SignUp onBack={() => setStage("landing")} onDone={(a) => { setAccount(a); setStage("pricing"); }} />;
-  if (stage === "pricing") return <Pricing name={account?.name || "friend"} onBack={() => setStage("landing")} onPick={(plan) => { setAccount({ ...(account as Account), plan }); setStage("connect"); }} />;
-  if (stage === "connect" || !txns || !result) return <Connect onBack={() => setStage("landing")} onPlaidSandbox={loadSampleBank} onQuickBooksSandbox={(bank) => loadSampleBank(bank, "qbo")} onPlaid={onPlaid} busy={busy} error={error} />;
+  const veil = busy === "bank" || loadFail ? <LoadVeil failed={loadFail} onRetry={() => retryLoad.current()} onClose={() => { setLoadFail(false); window.setTimeout(() => lastFocus.current?.focus(), 0); }} /> : null;
+  // While the veil is up, the page behind it cannot be focused or pressed. (React 18 passes inert through only as a string.)
+  const hush: object = veil ? { inert: "" } : {};
+  if (stage === "landing") return <><div {...hush}><Landing onStart={() => go("signup")} onSignIn={() => go("signup")} onDemo={() => loadSampleBank()} busy={busy === "bank"} /></div>{veil}</>;
+  if (stage === "signup") return <SignUp draft={draft} onDraft={setDraft} onBack={back} onHome={home} onDone={(a) => { setAccount({ ...a, plan: account?.plan }); go("pricing"); }} />;
+  // Changing plan from inside the app goes straight back to the number; during setup the next step is still Connect.
+  if (stage === "pricing") return <Pricing name={account?.name || "friend"} current={account?.plan} onBack={back} onHome={home} onPick={(plan) => { const toApp = planFromApp.current && !!txns; setAccount({ ...(account || { name: "", email: "", business: "" }), plan }); go(toApp ? "app" : "connect"); }} />;
+  if (stage === "connect" || !txns || !result) return <><div {...hush}><Connect onBack={back} onHome={home} onPlaidSandbox={loadSampleBank} onQuickBooksSandbox={(bank) => loadSampleBank(bank, "qbo")} onPlaid={onPlaid} busy={busy} error={error} /></div>{veil}</>;
 
   const byId = new Map(txns.map((t) => [t.id, t]));
   const openLine = (l: Line) => setWhy({ title: l.label, body: l.why, txns: l.txnIds?.map((i) => byId.get(i)!).filter(Boolean).slice(-6) });
@@ -150,7 +198,7 @@ export default function App() {
         {tab === "alerts" && <Alerts r={result} go={setTab} prefs={prefs} setPref={setPref} />}
         {tab === "settle" && <Settle r={result} />}
         {tab === "learn" && <Learn r={result} />}
-        {tab === "profile" && <Profile r={result} account={account} source={source} plan={PLAN_NAME[account?.plan || "free"]} onReconnect={() => setStage("connect")} onEditInfo={() => setStage("signup")} onSignOut={signOut} />}
+        {tab === "profile" && <Profile r={result} account={account} source={source} plan={PLAN_NAME[account?.plan || "free"]} onReconnect={() => go("connect")} onEditInfo={() => go("signup")} onChangePlan={() => go("pricing")} onSignOut={signOut} />}
         <p className="muted pb-4 pt-2 text-center text-xs">Data: {source}. Educational estimate, not tax advice.</p>
       </main>
 
@@ -181,14 +229,40 @@ export default function App() {
 
 /* ---------- small pieces ---------- */
 
+// Shown from the moment a load is pressed until the data is in. After about eight seconds, or on failure, it offers a retry.
+function LoadVeil({ failed, onRetry, onClose }: { failed: boolean; onRetry: () => void; onClose: () => void }) {
+  useEffect(() => { if (!failed) return; const k = (e: KeyboardEvent) => e.key === "Escape" && onClose(); window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, [failed, onClose]);
+  return (
+    <div data-veil className="fixed inset-0 z-50 grid place-items-center bg-black/80 p-4 backdrop-blur-sm" role={failed ? "alertdialog" : "status"} aria-modal={failed || undefined} aria-label={failed ? "The sample didn't load" : "Loading the sample business"}>
+      <div className="w-full max-w-sm rounded-[28px] border border-zinc-800 bg-[#0b0b0b] p-7 text-center">
+        {failed ? (
+          <>
+            <h2 className="font-display text-xl font-semibold">That didn&apos;t load</h2>
+            <p className="mt-2 text-sm text-zinc-300">We couldn&apos;t read the sample data. Check your connection, then try again.</p>
+            <button autoFocus className="btn btn-primary mt-5 w-full !rounded-xl" onClick={onRetry}>Try again</button>
+            <button className="mt-2 w-full py-2 text-sm text-zinc-300 underline-offset-4 hover:text-white hover:underline" onClick={onClose}>Go back</button>
+          </>
+        ) : (
+          <>
+            <Loader2 className="mx-auto animate-spin motion-reduce:animate-none" size={28} aria-hidden />
+            <h2 className="font-display mt-4 text-xl font-semibold">Loading the sample business…</h2>
+            <p className="mt-2 text-sm text-zinc-300">Reading a year of sample transactions and sorting business from personal.</p>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function useCountUp(target: number) {
-  const [v, setV] = useState(target);
+  // Start from 0 (or from the target when motion is reduced) so the first frame never shows the final figure and then resets.
+  const [v, setV] = useState(() => (typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches ? target : 0));
   const prev = useRef(0);
   useEffect(() => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) { setV(target); prev.current = target; return; }
     const from = prev.current, start = performance.now(), dur = 900;
     let raf = 0;
-    const step = (now: number) => { const p = Math.min(1, (now - start) / dur); const e = 1 - Math.pow(1 - p, 3); setV(Math.round(from + (target - from) * e)); if (p < 1) raf = requestAnimationFrame(step); else prev.current = target; };
+    const step = (now: number) => { const p = Math.min(1, Math.max(0, (now - start) / dur)); const e = 1 - Math.pow(1 - p, 3); setV(Math.round(from + (target - from) * e)); if (p < 1) raf = requestAnimationFrame(step); else prev.current = target; };
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
   }, [target]);
@@ -421,7 +495,7 @@ function PayAssist({ r, amountFmt, year, onClose }: { r: NumberResult; amountFmt
 
 /* ---------- Profile / settings ---------- */
 
-function Profile({ r, account, source, plan, onReconnect, onEditInfo, onSignOut }: { r: NumberResult; account: Account | null; source: string; plan: string; onReconnect: () => void; onEditInfo: () => void; onSignOut: () => void }) {
+function Profile({ r, account, source, plan, onReconnect, onEditInfo, onChangePlan, onSignOut }: { r: NumberResult; account: Account | null; source: string; plan: string; onReconnect: () => void; onEditInfo: () => void; onChangePlan: () => void; onSignOut: () => void }) {
   async function exportPdf() {
     const { jsPDF } = await import("jspdf");
     const doc = new jsPDF({ unit: "pt", format: "letter" });
@@ -465,6 +539,7 @@ function Profile({ r, account, source, plan, onReconnect, onEditInfo, onSignOut 
         </dl>
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <button className="btn btn-ghost" onClick={onEditInfo}>Edit my info</button>
+          <button className="btn btn-ghost" onClick={onChangePlan}>Change plan</button>
           <button className="btn btn-ghost !px-3 text-xs text-zinc-400" onClick={exportPdf} title="Download a PDF of your number"><Download size={14} />Export PDF</button>
         </div>
       </div>
@@ -549,8 +624,8 @@ function Breakdown({ r }: { r: NumberResult }) {
           {r.taxPaidCents > 0 && <div className="flex items-center justify-between gap-3 px-1"><span>Already paid to the IRS</span><span className="num">−{usd(r.taxPaidCents)}</span></div>}
           <div className="flex items-center justify-between gap-3 rounded-xl bg-white px-4 py-3 text-black"><span className="flex items-center gap-1.5 font-semibold"><ArrowRight size={17} strokeWidth={2.75} />You owe the IRS</span><span className="font-display num text-xl font-semibold">{usd(r.owedSoFarCents)}</span></div>
         </div>
-        <details className="mt-3 border-t border-zinc-800 pt-3 text-xs">
-          <summary className="muted cursor-pointer list-none hover:text-zinc-300">Full IRS calculation (for the accountants)</summary>
+        <details className="group/full mt-3 border-t border-zinc-800 pt-3 text-xs">
+          <summary className="btn btn-ghost w-full cursor-pointer list-none justify-between !rounded-xl !px-4 !py-3 text-sm">Full IRS calculation (for the accountants)<ChevronDown size={16} className="shrink-0 transition group-open/full:rotate-180" aria-hidden /></summary>
           <dl className="mt-2.5 space-y-1 text-zinc-400">
             {([
               ["Profit", f.netProfitCents], ["× 92.35% = counted for self-employment tax", f.se.netEarningsCents],
