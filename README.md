@@ -10,15 +10,15 @@ Young business owners owe taxes from their first $400 of profit, at any age ([IR
 ## Who it's for
 - **User:** solo business owners aged roughly 14–22 (lawn care, detailing, pressure washing, reselling, streaming) making $1K–$100K a year with no accountant, paid through Cash App, Venmo, Zelle and a bank they already trust.
 - **Co-pilot:** their parent, who gets a read-only view and the same alerts.
-- **Pricing:** free to see your Number; **$49.99 per tax year** for alerts, sorting, parent view and CPA export (no monthly subscription). Second revenue line: referrals to small CPA firms that want organized young clients.
+- **Pricing:** 30-day free trial, no card needed; **Season Pass: $120 one-time per tax year**, no auto-renew (no monthly subscription). Second revenue line: referrals to small CPA firms that want organized young clients.
 
 ## How it works
 1. **Connect** a bank through Plaid, or upload Chase / Cash App / Venmo CSV statements, or load the demo.
 2. **Sort:** rules tag every transaction as business income, business cost, personal, transfer or tax payment, each with a plain-English reason. Unclear payments go to a quick "Business or personal?" list.
-3. **Calculate (code, not AI):** The Number = federal taxes owed so far (self-employment tax + income tax − payments made) + one month of average business costs + bills due in the next 45 days.
+3. **Calculate (code, not AI):** the headline is the estimated federal tax you owe so far: self-employment tax + income tax − payments made. (The engine also computes a cushion of one month of business costs plus bills due in 45 days; the screen shows the tax figure.)
 4. **Explain:** every tile and line has a "Why?" with the actual math.
 5. **Alert:** below your Number, missed or upcoming estimated tax dates, unsorted payments, and when a parent's rule of thumb is too low.
-6. **Send to CPA:** a one-page summary plus a CSV of every tagged transaction.
+6. **Send to CPA:** download a one-page PDF estimate summary from Profile.
 
 ## Why not just ask ChatGPT?
 ChatGPT doesn't see your account (you paste everything in, every time), never alerts you, forgets between chats, and guesses at math. The Number reads your statements, runs IRS math in tested code, watches all year and explains every line.
@@ -27,7 +27,7 @@ ChatGPT doesn't see your account (you paste everything in, every time), never al
 - All money is integer cents; all tax math is deterministic code in `lib/tax.ts` with parameters and sources in `lib/taxConfig.ts`.
 - 2026 values verified against the IRS ([inflation adjustments](https://www.irs.gov/newsroom/irs-releases-tax-inflation-adjustments-for-tax-year-2026-including-amendments-from-the-one-big-beautiful-bill)): standard deduction $16,100; single brackets 10% to $12,400, 12% to $50,400, …; Social Security wage base $184,500; SE tax 15.3% on 92.35% of net earnings.
 - `npm test` runs hand-checked tax cases plus reconciliation tests on the demo data (the Number equals the sum of its lines; income sums from tagged transactions; transfers aren't income).
-- Assumptions shown in the app: single filer, no other income, federal only, no QBI deduction (conservative). **Educational estimate, not tax advice.**
+- Assumptions shown in the app: single filer, no other income, federal only, includes the 20% QBI deduction. **Educational estimate, not tax advice.**
 
 ## Real vs. mocked
 | Piece | Status |
@@ -36,8 +36,8 @@ ChatGPT doesn't see your account (you paste everything in, every time), never al
 | Bank connection | **Real Plaid Link in Sandbox** (bank search + test login `user_good`/`pass_good`). After a successful test login, the app loads a full-year sample business through Plaid Sandbox (`/sandbox/public_token/create`), because Plaid's default test users have no realistic business year. Production for Chase etc. requires Plaid approval |
 | Tax rules and rates | **Real** 2026 IRS parameters for sole proprietors (SE tax, brackets, standard deduction, 20% QBI) with sources |
 | QuickBooks connection | **Sandbox demo**: opens the same Plaid Link sandbox window, labeled QuickBooks, then loads the same sample business. A tested QuickBooks Profit & Loss parser is in `lib/qbo.ts`. Real Intuit OAuth routes are built (`/api/qbo/*`) and switch on with `QBO_CLIENT_ID` / `QBO_CLIENT_SECRET` |
-| Sample business size | **Randomized each load** (income scaled 1.2x–4x, costs scale slower) so judges see different, realistic amounts; tax math is the same |
-| Box 2 live feed | **Simulated**: a random job (green) or business cost (red) every 30 seconds; the tax change on each one is real math |
+| Sample business size | **Fixed** at `DEMO_FACTOR = 1.8` in `lib/scale.ts` (income ×1.8, costs scale slower), so a fresh sample load always shows the same figure as the deck |
+| Box 2 "New income and costs" | **Simulated**: a random job (green) or business cost (red) every 10 seconds; each estimated tax change uses the current average tax rate |
 | Text-message alerts | Shown in-app; SMS delivery not wired up yet |
 | Plaid webhook | Endpoint acknowledges events; production would re-sync and text |
 

@@ -100,7 +100,7 @@ export function computeNumber(txns: Txn[], profile: Profile): NumberResult {
 
   const reviewCount = inYear.filter((t) => t.kind === "review").length;
   const seWhy = fed.se.belowThreshold
-    ? `Good news — you've made under $400 in profit, so you don't owe this one yet.`
+    ? `Good news — you've made under $400 in profit, so this estimate has no self-employment tax yet.`
     : `This is the big one nobody warns you about. At a regular job, your boss quietly covers half of your Social Security and Medicare. Working for yourself, you pay both halves — a little over 14 cents on every dollar of profit. On your ${formatUSD(net)} profit, that's ${formatUSD(fed.se.totalCents)}. It kicks in once you make $400, at any age.`;
   const itWhy = fed.taxableIncomeCents === 0
     ? `Your write-offs cover all of your profit, so there's no income tax to pay here.`
@@ -129,10 +129,10 @@ export function computeNumber(txns: Txn[], profile: Profile): NumberResult {
   const building = quarters.find((q) => q.status === "building");
   const alerts: Alert[] = [];
   if (safe < 0) alerts.push({ id: "below", level: "critical", title: `You're ${formatUSD(-safe)} below your Number`, body: `You have ${formatUSD(balance)} across your accounts, but ${formatUSD(theNumber)} of it is already spoken for. Hold off on big purchases until you're back above it.` });
-  if (missedQ.length) alerts.push({ id: "missed", level: "warning", title: `${missedQ.length} estimated tax payment${missedQ.length > 1 ? "s" : ""} missed: ${formatUSD(missedQ.reduce((s, q) => s + q.remainingCents, 0))}`, body: `${missedQ.map((q) => `${formatUSD(q.remainingCents)} was due ${q.due}`).join(", ")}. These amounts are locked in. Paying soon at irs.gov/payments keeps the late penalty small.` });
-  if (building) alerts.push({ id: "next", level: "info", title: `Next payment so far: ${formatUSD(building.remainingCents)}, due ${building.due} (${daysLeft} days)`, body: `This one is still growing. It covers what you earn ${building.covers}, so it goes up with every job until the period ends.` });
+  if (missedQ.length) alerts.push({ id: "missed", level: "warning", title: `${missedQ.length} estimated tax payment${missedQ.length > 1 ? "s" : ""} missed: ${formatUSD(missedQ.reduce((s, q) => s + q.remainingCents, 0))}`, body: `Estimated ${missedQ.map((q) => `${formatUSD(q.remainingCents)} for the period due ${q.due}`).join(", ")}. Those periods have ended. Paying soon at irs.gov/payments keeps the late penalty small.` });
+  if (building) alerts.push({ id: "next", level: "info", title: `Estimated payment for this period: ${formatUSD(building.remainingCents)}, due ${building.due} (${daysLeft} days)`, body: `This one is still open. It covers ${building.covers}, and it changes as income, costs and payments come in until the period ends.` });
   if (reviewCount) alerts.push({ id: "review", level: "info", title: `${reviewCount} payments need a quick answer`, body: `Tell us business or personal. Payment apps expect business money on a business profile, so sorting these keeps you legit.` });
-  if (profile.parentRule && owed > profile.parentRule.amountCents) alerts.push({ id: "rule", level: "warning", title: `${profile.parentRule.label} is wrong`, body: `You're under the limit for income tax, but you still owe ${formatUSD(owed)}, mostly self-employment tax. It starts at $400 of profit, at any age.` });
+  if (profile.parentRule && owed > profile.parentRule.amountCents) alerts.push({ id: "rule", level: "warning", title: `${profile.parentRule.label} is wrong`, body: `You're under the limit for income tax, but you still owe an estimated ${formatUSD(owed)}, mostly self-employment tax. It starts at $400 of profit, at any age.` });
 
   return {
     asOf, incomeCents: income, expensesCents: expenses, netProfitCents: net, reviewCount, fed,

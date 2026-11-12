@@ -326,20 +326,20 @@ function Home({ r, openLine, setWhy, txns, go }: { r: NumberResult; openLine: (l
     <>
       {/* The one number */}
       <section className="card hero-glow overflow-hidden px-6 py-10 text-center sm:py-14">
-        <div className="flex items-center justify-center gap-2 text-sm text-zinc-400"><span className="dot" style={{ background: anyLate ? "var(--red)" : "var(--green)" }} />You owe the IRS</div>
+        <div className="flex items-center justify-center gap-2 text-sm text-zinc-400"><span className="dot" style={{ background: anyLate ? "var(--red)" : "var(--green)" }} />Estimated tax you owe</div>
         <div className="font-display num mt-3 text-[clamp(4rem,13vw,8rem)] font-semibold leading-none tracking-tight">{usd(shown)}</div>
         <p className="mx-auto mt-4 max-w-md text-zinc-400">Federal tax on your {TAX_YEAR} business profit as a sole proprietor, minus anything you've already paid.</p>
-        <button className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-zinc-300 underline-offset-4 hover:text-white hover:underline" onClick={() => setWhy({ title: `Why ${formatUSD(r.owedSoFarCents)}?`, body: taxLines.map((l) => `${l.label}: ${formatUSD(l.amountCents)}. ${l.why}`).join("\n\n") })}>Why this much? <Info size={14} /></button>
+        <button className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-zinc-300 underline-offset-4 hover:text-white hover:underline" onClick={() => setWhy({ title: `How we estimated ${formatUSD(r.owedSoFarCents)}`, body: taxLines.map((l) => `${l.label}: ${formatUSD(l.amountCents)}. ${l.why}`).join("\n\n") })}>Why this much? <Info size={14} /></button>
       </section>
 
       {/* Two boxes */}
       {/* grid-cols-1 + min-w-0: a long feed row must not widen the column past the phone screen */}
       <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div className="card flex min-w-0 flex-col p-6">
-          <div className="flex items-center justify-between gap-2"><Label icon={Lock}>1 · Pay by {fmtDate(payBy)}</Label><span className="rounded-full border border-zinc-700 px-2.5 py-0.5 text-[11px] text-zinc-300">fixed</span></div>
+          <div className="flex items-center justify-between gap-2"><Label icon={Lock}>1 · Pay by {fmtDate(payBy)}</Label><span className="rounded-full border border-zinc-700 px-2.5 py-0.5 text-[11px] text-zinc-300">estimated</span></div>
           <div className="font-display num mt-4 text-5xl font-semibold">{usd(r.owedSoFarCents)}</div>
-          <div className="mt-1 text-sm text-zinc-400">Due <b className="text-white">{fmtDate(payBy, true)}</b> · {days(payBy)} days from now</div>
-          <p className="muted mt-2 text-sm">Tax on money you've already earned. It won't change.</p>
+          <div className="mt-1 text-sm text-zinc-400">Next due date <b className="text-white">{fmtDate(payBy, true)}</b> · {days(payBy)} days from now</div>
+          <p className="muted mt-2 text-sm">Tax on money you've already earned. New income and costs show up in box 2.</p>
           {owedRows.length > 1 && (
             <ul className="mt-3 divide-y text-sm">
               {owedRows.map((q) => (
@@ -355,23 +355,23 @@ function Home({ r, openLine, setWhy, txns, go }: { r: NumberResult; openLine: (l
         </div>
 
         <div className="card hero-glow flex min-w-0 flex-col p-6">
-          <div className="flex items-center justify-between gap-2"><Label icon={CalendarClock}>2 · New money · through {live ? fmtDate(live.end) : fmtDate(payBy)}</Label><span className="flex items-center gap-1.5 text-xs text-zinc-400"><span className="dot live-dot" style={{ background: "var(--green)" }} />live</span></div>
+          <div className="flex items-center justify-between gap-2"><Label icon={CalendarClock}>2 · New income and costs</Label><span className="flex items-center gap-1.5 text-xs text-zinc-400"><span className="dot live-dot" style={{ background: "var(--green)" }} />live</span></div>
           <div className="mt-4 font-display num text-4xl font-semibold transition-colors duration-500" style={{ color: flash === "in" ? "var(--green)" : flash === "out" ? "var(--red)" : undefined }}>{newTaxShown < 0 ? "−" : "+"}{usd(Math.abs(newTaxShown))}</div>
-          <div className="mt-1 text-sm text-zinc-400">Extra tax on what you earn from now through <b className="text-white">{live ? fmtDate(live.end, true) : fmtDate(payBy, true)}</b>{live && <> &mdash; {days(live.end)} days to go</>}.</div>
-          <p className="muted mt-2 text-sm">Simple rule: set aside about <b className="text-white">${per100}</b> of every <b className="text-white">$100</b> you make, and you&apos;re covered.</p>
+          <div className="mt-1 text-sm text-zinc-400">Estimated extra tax on new income and costs from now through <b className="text-white">{live ? fmtDate(live.end, true) : fmtDate(payBy, true)}</b>{live && <> &mdash; {days(live.end)} days to go</>}.</div>
+          <p className="muted mt-2 text-sm">Simple rule: set aside about <b className="text-white">${per100}</b> of every <b className="text-white">$100</b> you make.</p>
           <ul className="mt-4 flex-1 space-y-2 text-sm" aria-live="polite">
-            {feed.length === 0 && <li className="muted flex items-center gap-2 text-sm"><span className="dot live-dot" style={{ background: "var(--green)" }} />Watching your accounts for new money…</li>}
+            {feed.length === 0 && <li className="muted flex items-center gap-2 text-sm"><span className="dot live-dot" style={{ background: "var(--green)" }} />Waiting for new income and costs…</li>}
             {[...feed].reverse().slice(0, 5).map((x, i) => (
               <li key={x.id} className={`flex items-center justify-between gap-3 rounded-xl border px-3 py-2 ${i === 0 ? "rise border-zinc-700" : "border-transparent"}`}>
                 <span className="min-w-0 truncate"><span className="muted mr-2 text-xs">{x.time}</span>{x.description}</span>
                 <span className="flex shrink-0 items-center gap-3">
                   <b className="num" style={{ color: x.kind === "business_income" ? "var(--green)" : "var(--red)" }}>{x.kind === "business_income" ? "+" : "−"}{usd(x.amountCents)}</b>
-                  <span className="num w-24 text-right text-xs text-zinc-400">{x.deltaCents >= 0 ? "+" : "−"}{usd(Math.abs(x.deltaCents))} owed</span>
+                  <span className="num w-24 text-right text-xs text-zinc-400">{x.deltaCents >= 0 ? "+" : "−"}{usd(Math.abs(x.deltaCents))} est. tax</span>
                 </span>
               </li>
             ))}
           </ul>
-          <p className="mt-4 text-xs text-zinc-400">Demo: new money is simulated and updates every 10 seconds.</p>
+          <p className="mt-4 text-xs text-zinc-400">Demo: new income and costs are simulated and update every 10 seconds.</p>
         </div>
       </section>
 
@@ -400,13 +400,13 @@ function Settle({ r }: { r: NumberResult }) {
       <div className="text-center">
         <h1 className="font-display mt-3 text-4xl font-semibold">Settle up</h1>
         <p className="muted mt-1">Pay the IRS without the maze.</p>
-        <p className="mx-auto mt-3 max-w-sm text-xs leading-relaxed text-zinc-400">AI can make mistakes &mdash; double-check the amount and your details on the IRS page before you pay. This is an educational estimate, not tax advice.</p>
+        <p className="mx-auto mt-3 max-w-sm text-xs leading-relaxed text-zinc-400">This is an estimate from your data &mdash; double-check the amount and your details on the IRS page before you pay. Educational estimate, not tax advice.</p>
       </div>
 
       <div className="card hero-glow p-7 text-center sm:p-8">
-        <div className="muted text-xs font-medium uppercase tracking-[0.14em]">You owe</div>
+        <div className="muted text-xs font-medium uppercase tracking-[0.14em]">Estimated tax you owe</div>
         <div className="font-display num mt-1 text-6xl font-semibold leading-none">{amountFmt}</div>
-        <div className="muted mt-2 text-sm">Estimated tax &middot; due {dueStr}</div>
+        <div className="muted mt-2 text-sm">Next due date {dueStr}</div>
         <button className="btn btn-primary mt-6 w-full !rounded-xl !py-4 text-base" onClick={start}>
           Pay guided <ArrowRight size={16} />
         </button>
@@ -414,7 +414,7 @@ function Settle({ r }: { r: NumberResult }) {
       </div>
 
       <div className="text-center">
-        <p className="text-[15px] font-semibold">Your exact number, then the IRS maze in <span className="num">~30 seconds</span>.</p>
+        <p className="text-[15px] font-semibold">Your estimated number, then the IRS maze in <span className="num">~30 seconds</span>.</p>
         <p className="muted mx-auto mt-1 max-w-sm text-xs leading-relaxed">
           Over half of small-business owners lose <span className="text-zinc-300">40+ hours a year</span> to federal taxes, and about <span className="text-zinc-300">1 in 3</span> aren&apos;t even sure they owe estimated tax. The Number computes it and walks you through paying.
           <br />
@@ -435,7 +435,7 @@ function PayAssist({ r, amountFmt, year, onClose }: { r: NumberResult; amountFmt
     { label: "Apply Payment To", verb: "Pick the form in the 1st dropdown", show: "1040-ES", copy: "1040ES" },
     { label: "Reason for Payment", verb: "Then pick the reason", show: "Estimated Tax", copy: "Estimated Tax" },
     { label: "Tax Period for Payment", verb: "Pick the year", show: String(year), copy: String(year) },
-    { label: "Amount", verb: "Type or paste this exact amount", show: amountFmt, copy: amountRaw },
+    { label: "Amount", verb: "Type or paste this amount — it's our estimate", show: amountFmt, copy: amountRaw },
   ];
   const TOTAL = fields.length + 1;
   const [i, setI] = useState(0);
@@ -476,7 +476,7 @@ function PayAssist({ r, amountFmt, year, onClose }: { r: NumberResult; amountFmt
           <div className="mt-6 text-center">
             <span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-white text-black"><Check size={22} /></span>
             <h3 className="font-display mt-4 text-xl font-semibold">One step left &mdash; on the IRS page</h3>
-            <p className="muted mt-1 text-sm">Enter your bank routing + account number, then hit <b className="text-white">Submit</b>. That pays {amountFmt}.</p>
+            <p className="muted mt-1 text-sm">Enter your bank routing + account number, then hit <b className="text-white">Submit</b>. That pays {amountFmt}, your estimated tax.</p>
             <button className="btn btn-primary mt-5 w-full !rounded-xl !py-3.5" onClick={onClose}>Done</button>
           </div>
         )}
@@ -485,7 +485,7 @@ function PayAssist({ r, amountFmt, year, onClose }: { r: NumberResult; amountFmt
           <a className="muted inline-flex items-center gap-1 hover:text-white" href={PAY_URL} target="_blank" rel="noreferrer">IRS page <ArrowUpRight size={12} /></a>
           <details className="text-right">
             <summary className="muted cursor-pointer list-none hover:text-white">Why these?</summary>
-            <p className="muted mt-2 max-w-[15rem] text-left text-[11px] leading-relaxed">You&apos;re making a quarterly estimated payment, so it&apos;s 1040-ES &rarr; Estimated Tax &rarr; {TAX_YEAR}. The amount is your number &mdash; income minus expenses, run through SE tax, the deduction and your bracket.</p>
+            <p className="muted mt-2 max-w-[15rem] text-left text-[11px] leading-relaxed">You&apos;re making a quarterly estimated payment, so it&apos;s 1040-ES &rarr; Estimated Tax &rarr; {TAX_YEAR}. The amount is your estimated number &mdash; income minus expenses, run through SE tax, the deduction and your bracket.</p>
           </details>
         </div>
       </div>
@@ -505,18 +505,18 @@ function Profile({ r, account, source, plan, onReconnect, onEditInfo, onChangePl
     doc.setFont("helvetica", "normal"); doc.setFontSize(11); doc.setTextColor(120, 120, 120); doc.text(`Federal tax summary · ${TAX_YEAR} tax year`, M, 88);
     if (account?.name || account?.business) doc.text(`${account?.name || "You"}${account?.business ? "  ·  " + account.business : ""}`, M, 108);
     let y = 160;
-    doc.setFontSize(11); doc.setTextColor(120, 120, 120); doc.text("You owe the IRS", M, y - 20);
+    doc.setFontSize(11); doc.setTextColor(120, 120, 120); doc.text("Estimated tax you owe", M, y - 20);
     doc.setFont("helvetica", "bold"); doc.setFontSize(34); doc.setTextColor(10, 10, 10); doc.text(formatUSD(r.owedSoFarCents, { cents: true }), M, y + 12);
-    if (due) { doc.setFont("helvetica", "normal"); doc.setFontSize(11); doc.setTextColor(90, 90, 90); doc.text(`Due ${new Date(due + "T12:00:00Z").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`, M, y + 36); }
+    if (due) { doc.setFont("helvetica", "normal"); doc.setFontSize(11); doc.setTextColor(90, 90, 90); doc.text(`Next due date ${new Date(due + "T12:00:00Z").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`, M, y + 36); }
     y += 80;
-    doc.setFont("helvetica", "bold"); doc.setFontSize(13); doc.setTextColor(10, 10, 10); doc.text("How it adds up", M, y); y += 26;
+    doc.setFont("helvetica", "bold"); doc.setFontSize(13); doc.setTextColor(10, 10, 10); doc.text("How the estimate adds up", M, y); y += 26;
     const row = (k: string, v: string, bold = false) => { doc.setFont("helvetica", bold ? "bold" : "normal"); doc.setFontSize(bold ? 12 : 11); doc.setTextColor(bold ? 10 : 60, bold ? 10 : 60, bold ? 10 : 60); doc.text(k, M, y); doc.text(v, R, y, { align: "right" }); y += 24; };
     row("Business profit", formatUSD(r.netProfitCents));
     r.lines.filter((l) => l.key === "se" || l.key === "income").forEach((l) => row(l.label, formatUSD(l.amountCents)));
     doc.setDrawColor(210); doc.line(M, y - 8, R, y - 8);
-    row("Total owed", formatUSD(r.owedSoFarCents, { cents: true }), true); y += 16;
+    row("Estimated tax you owe", formatUSD(r.owedSoFarCents, { cents: true }), true); y += 16;
     doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(140, 140, 140);
-    doc.text(doc.splitTextToSize(`Generated by The Number on ${new Date().toLocaleDateString()}. Data: ${source}. Educational estimate for a sole proprietor, not tax advice — AI can make mistakes, so verify on the IRS page before you pay.`, R - M), M, y);
+    doc.text(doc.splitTextToSize(`Generated by The Number on ${new Date().toLocaleDateString()}. Data: ${source}. Educational estimate for a sole proprietor, not tax advice. Check the amount on the IRS page before you pay.`, R - M), M, y);
     doc.save("the-number-tax-summary.pdf");
   }
   const rows: [string, string][] = [
@@ -574,11 +574,11 @@ function Breakdown({ r }: { r: NumberResult }) {
   const steps: [string, string, string, number][] = [
     ["1", "You made", "Money in, minus business costs (your profit)", f.netProfitCents],
     ["2", "Self-employment tax", "15.3% on most of your profit. It pays your Social Security and Medicare.", f.se.totalCents],
-    ["3", "Income tax", f.incomeTaxCents > 0 ? `The first ${usd(f.netProfitCents - f.taxableIncomeCents)} is tax-free (deductions). The rest is taxed at 10%, then 12%.` : "Your deductions cover all of it, so you owe $0 here.", f.incomeTaxCents],
+    ["3", "Income tax", f.incomeTaxCents > 0 ? `The first ${usd(f.netProfitCents - f.taxableIncomeCents)} is tax-free (deductions). The rest is taxed at 10%, then 12%.` : "Your deductions cover all of it, so the estimate here is $0.", f.incomeTaxCents],
   ];
   return (
     <section className="card p-6 sm:p-8">
-      <h2 className="font-display text-2xl font-semibold">How we got {usd(r.owedSoFarCents)}</h2>
+      <h2 className="font-display text-2xl font-semibold">How we estimated {usd(r.owedSoFarCents)}</h2>
 
       {/* The one picture: out of every $100 you made */}
       <div className="mt-6">
@@ -603,7 +603,7 @@ function Breakdown({ r }: { r: NumberResult }) {
         )}
         <li className="flex items-center gap-4 pt-4">
           <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white text-sm font-bold text-black">=</span>
-          <div className="flex-1 font-semibold">You owe the IRS</div>
+          <div className="flex-1 font-semibold">Estimated tax you owe</div>
           <div className="font-display num text-2xl font-semibold">{usd(r.owedSoFarCents)}</div>
         </li>
       </ol>
@@ -622,7 +622,7 @@ function Breakdown({ r }: { r: NumberResult }) {
             <p className="muted mt-1 text-xs leading-relaxed">Your write-offs take {usd(f.netProfitCents - f.taxableIncomeCents)} off the top first. Only the {usd(f.taxableIncomeCents)} left over gets taxed, starting at just <b className="text-zinc-300">10%</b>.</p>
           </div>
           {r.taxPaidCents > 0 && <div className="flex items-center justify-between gap-3 px-1"><span>Already paid to the IRS</span><span className="num">−{usd(r.taxPaidCents)}</span></div>}
-          <div className="flex items-center justify-between gap-3 rounded-xl bg-white px-4 py-3 text-black"><span className="flex items-center gap-1.5 font-semibold"><ArrowRight size={17} strokeWidth={2.75} />You owe the IRS</span><span className="font-display num text-xl font-semibold">{usd(r.owedSoFarCents)}</span></div>
+          <div className="flex items-center justify-between gap-3 rounded-xl bg-white px-4 py-3 text-black"><span className="flex items-center gap-1.5 font-semibold"><ArrowRight size={17} strokeWidth={2.75} />Estimated tax you owe</span><span className="font-display num text-xl font-semibold">{usd(r.owedSoFarCents)}</span></div>
         </div>
         <details className="group/full mt-3 border-t border-zinc-800 pt-3 text-xs">
           <summary className="btn btn-ghost w-full cursor-pointer list-none justify-between !rounded-xl !px-4 !py-3 text-sm">Full IRS calculation (for the accountants)<ChevronDown size={16} className="shrink-0 transition group-open/full:rotate-180" aria-hidden /></summary>
@@ -667,7 +667,7 @@ function Alerts({ r, go, prefs, setPref }: { r: NumberResult; go: (t: Tab) => vo
     ["late", "A payment is late", "Right after a due date passes, with what to pay."],
     ["paid", "A customer pays me", "Shows how much of it you'll owe in tax."],
     ["weekly", "Weekly recap", "Sundays: what you earned and what you owe now."],
-    ["locks", "A tax payment locks in", "When a period ends and the amount you owe is final."],
+    ["locks", "A payment period ends", "When a period ends, with the estimated amount for it."],
     ...customs.map((c) => [c.id, c.text, "Your own alert"] as [string, string, string]),
   ];
   return (
@@ -762,7 +762,7 @@ function TxnRow({ t, children }: { t: Txn; children?: React.ReactNode }) {
 const AU = "https://american.edu/media/news/20230418_CarolineBrucknerTaxLiteracySurvey.cfm";
 const FB = "https://www.globenewswire.com/news-release/2025/03/19/3045674/0/en/Hidden-Tax-Challenges-for-Small-Businesses-FreshBooks-2025-Tax-Trend-Report.html";
 const STATS: { big: string; what: string; means: (r: NumberResult) => string; src: string; url: string }[] = [
-  { big: "1 in 3", what: "didn't know whether they had to pay the IRS every quarter.", means: (r) => `You do. Your next payment is ${formatUSD(r.owedSoFarCents)}, due ${r.next.due}.`, src: "American University Kogod, Small Business Tax Literacy Survey", url: AU },
+  { big: "1 in 3", what: "didn't know whether they had to pay the IRS every quarter.", means: (r) => `Your estimated tax so far is ${formatUSD(r.owedSoFarCents)}; the next due date is ${r.next.due}.`, src: "American University Kogod, Small Business Tax Literacy Survey", url: AU },
   { big: "37%", what: "say filing taxes leaves them anxious and confused.", means: () => "That's why every line of your Number has a plain-English 'why'.", src: "American University Kogod, Small Business Tax Literacy Survey", url: AU },
   { big: "26%", what: "of small business owners and freelancers feel completely confident about their taxes.", means: () => "Confidence comes from knowing the number before April, not after.", src: "FreshBooks 2025 Tax Trends Report (about 1,300 surveyed)", url: FB },
   { big: "35%", what: "say organizing receipts is their biggest tax headache.", means: (r) => `We sorted ${formatUSD(r.expensesCents)} of your business costs automatically.`, src: "FreshBooks 2025 Tax Trends Report", url: FB },
@@ -771,10 +771,10 @@ const STATS: { big: string; what: string; means: (r: NumberResult) => string; sr
 function Learn({ r }: { r: NumberResult }) {
   const months = [3, 2, 3, 4];
   const cards: [string, string, React.ReactNode][] = [
-    ["01", "What is The Number?", <>How much you owe the IRS for your business this year, after anything you've already paid. One number, always up to date.</>],
+    ["01", "What is The Number?", <>An estimate of how much you owe the IRS for your business this year, after anything you've already paid. One number, worked out from your transactions.</>],
     ["02", "Am I a sole proprietor?", <>If you run a business by yourself and never formed an LLC or corporation, yes, automatically. You and the business are the same for taxes: profit goes on <b>Schedule C</b> of your own return, and nobody takes tax out for you (<a className="underline" href={SOURCES.soleProprietor} target="_blank" rel="noreferrer">IRS</a>).</>],
-    ["03", "Self-employment tax (the one nobody tells you about)", <>When you have a job, your boss pays half your Social Security and Medicare. When you work for yourself, you pay both halves: <b>15.3% on 92.35% of your profit</b>. It starts at <b>$400 of profit, at any age</b> (<a className="underline" href={SOURCES.youngEntrepreneurs} target="_blank" rel="noreferrer">IRS</a>). For you that's <b>{formatUSD(r.fed.se.totalCents)}</b>.</>],
-    ["04", "Why do I owe tax if I'm under the limit?", <>The {formatUSD(TAX_2026.standardDeductionCents)} standard deduction only shields you from <i>income</i> tax. That's why your income tax is {formatUSD(r.fed.incomeTaxCents)}. It doesn't cover self-employment tax at all.</>],
+    ["03", "Self-employment tax (the one nobody tells you about)", <>When you have a job, your boss pays half your Social Security and Medicare. When you work for yourself, you pay both halves: <b>15.3% on 92.35% of your profit</b>. It starts at <b>$400 of profit, at any age</b> (<a className="underline" href={SOURCES.youngEntrepreneurs} target="_blank" rel="noreferrer">IRS</a>). For you, that's an estimated <b>{formatUSD(r.fed.se.totalCents)}</b>.</>],
+    ["04", "Why do I owe tax if I'm under the limit?", <>The {formatUSD(TAX_2026.standardDeductionCents)} standard deduction only shields you from <i>income</i> tax. That's why your estimated income tax is {formatUSD(r.fed.incomeTaxCents)}. It doesn't cover self-employment tax at all.</>],
     ["05", "Paying the IRS during the year", <>Nobody withholds tax from your Cash App, so the IRS expects <b>estimated payments</b> four times a year. Pay at <a className="underline" href="https://www.irs.gov/payments" target="_blank" rel="noreferrer">irs.gov/payments</a>. Paying late adds a small penalty, and paying a bit each month avoids it.</>],
     ["06", "The 20% small-business deduction", <>Sole proprietors can knock up to 20% off their business profit for income tax (the QBI deduction). We include it, so your number isn't inflated (<a className="underline" href={SOURCES.qbi} target="_blank" rel="noreferrer">IRS</a>).</>],
     ["07", "Business vs. personal on payment apps", <>Mixing them makes your profit look bigger (more tax) or smaller (trouble later). Tag every payment, or better, use a separate business profile.</>],

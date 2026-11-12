@@ -67,7 +67,7 @@ export function Landing({ onStart, onDemo, onSignIn, busy }: { onStart: () => vo
         <span className="chip rise mb-4 uppercase tracking-[0.14em] text-zinc-300">For first-time business owners</span>
         <h1 className="headline font-display rise text-[clamp(2.4rem,6vw,4.5rem)] font-semibold leading-[1]" style={{ textWrap: "balance" as never }}>Know how much you owe.</h1>
         <p className="rise mt-4 max-w-2xl text-[clamp(1.15rem,2.4vw,1.55rem)] font-medium leading-snug text-white" style={{ textWrap: "balance" as never }}>
-          See exactly what you owe the IRS, and when. Built for first-time business owners.
+          See an estimate of what you owe the IRS, and when it&apos;s due. Built for first-time business owners.
         </p>
         <div className="rise mt-6 w-full max-w-2xl rounded-[28px] border border-white/15 bg-[#0c0c0c]/90 px-6 py-5 backdrop-blur sm:px-8">
           <div className="flex flex-col items-center gap-2 sm:flex-row sm:gap-6 sm:text-left">
@@ -280,7 +280,7 @@ export function SignUp({ onDone, onBack, onHome, draft, onDraft }: { onDone: (a:
 
 /* ---------------- Pricing (no subscriptions) ---------------- */
 
-const FEATURES = ["What you owe the IRS, always up to date", "Connect your bank (Plaid) or QuickBooks", "Type in cash jobs and see your tax update", "Due-date and late-payment alerts", "Business-or-personal sorting", "Built for sole proprietors (Schedule C)", "CPA-ready export at tax time"];
+const FEATURES = ["An estimate of what you owe the IRS, from your own transactions", "Connect your bank (Plaid) or QuickBooks", "Type in cash jobs and see your tax update", "Due-date and late-payment alerts", "Business-or-personal sorting", "Built for sole proprietors (Schedule C)", "CPA-ready export at tax time"];
 const PLANS = [
   { id: "trial", name: "Free trial", blurb: "Try everything for 30 days.", price: "$0", unit: "30 days · no card needed", cta: "Start free trial", note: "Ends on its own. We never charge you automatically." },
   { id: "season", name: "Season Pass", blurb: "One payment covers the whole tax year.", price: "$120", unit: "one-time · per tax year", popular: true, cta: "Start now", note: "No auto-renew. If it doesn't save you more than it costs, next season is on us." },
@@ -525,7 +525,7 @@ export function Connect({ onPlaidSandbox, onQuickBooksSandbox, onPlaid, busy, er
       <div className="mx-auto max-w-3xl py-12 text-center">
         <span className="chip text-zinc-300">Last step</span>
         <h1 className="headline font-display mt-5 text-[clamp(2.4rem,6vw,4.25rem)] font-semibold leading-[1]">Connect your business.</h1>
-        <p className="mx-auto mt-4 max-w-xl text-zinc-400">We read your income and business costs and show what you owe the IRS. Read-only.</p>
+        <p className="mx-auto mt-4 max-w-xl text-zinc-400">We read your income and business costs and estimate what you owe the IRS. Read-only.</p>
         <div className="glass mx-auto mt-10 grid max-w-xl gap-6 p-6 text-left sm:p-8">
           <div>
             <div className="flex items-center gap-4">
