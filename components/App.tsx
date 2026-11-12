@@ -1,14 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, ArrowRight, Check, ChevronDown, Loader2, Lightbulb, Lock, ArrowUpRight, Bell, BookOpen, Briefcase, CalendarClock, Download, Eye, EyeOff, GraduationCap, Home as HomeIcon, Copy, Info, Landmark, LogOut, Octagon, Sparkles, Printer, ShoppingBag, Terminal, User, Users, Wallet, X, Zap } from "lucide-react";
+import { AlertTriangle, ArrowRight, Check, ChevronDown, Loader2, Lightbulb, Lock, ArrowUpRight, Bell, BookOpen, Briefcase, CalendarClock, Download, Eye, EyeOff, GraduationCap, Home as HomeIcon, Copy, Info, Landmark, LogOut, Octagon, Banknote, Printer, ShoppingBag, Terminal, User, Users, Wallet, X, Zap } from "lucide-react";
 import { classify } from "@/lib/classify";
 import { latestBalance, normalize } from "@/lib/csv";
 import { DEMO_FILES, DEMO_PROFILE } from "@/lib/demo";
 import { computeNumber, type Alert, type Line, type NumberResult } from "@/lib/number";
 import { federalEstimate, formatUSD } from "@/lib/tax";
 import { randomFactor, scaleBusiness } from "@/lib/scale";
-import { ASSUMPTIONS, SOURCES, TAX_2026, TAX_YEAR } from "@/lib/taxConfig";
+import { ASSUMPTIONS, SOURCES, SOURCE_TITLES, TAX_2026, TAX_YEAR } from "@/lib/taxConfig";
 import type { Profile, Txn } from "@/lib/types";
 import { Connect, Landing, Logo, Pricing, SignUp, ThemeToggle, type Account } from "./Onboarding";
 
@@ -165,7 +165,7 @@ export default function App() {
   const byId = new Map(txns.map((t) => [t.id, t]));
   const openLine = (l: Line) => setWhy({ title: l.label, body: l.why, txns: l.txnIds?.map((i) => byId.get(i)!).filter(Boolean).slice(-6) });
   const alertDot = result.alerts.some((a) => a.level !== "info");
-  const NAV: [Tab, typeof HomeIcon, string][] = [["home", HomeIcon, "Home"], ["alerts", Bell, "Alerts"], ["settle", Sparkles, "Settle"], ["learn", GraduationCap, "Learn"], ["profile", User, "Profile"]];
+  const NAV: [Tab, typeof HomeIcon, string][] = [["home", HomeIcon, "Home"], ["alerts", Bell, "Alerts"], ["settle", Banknote, "Settle"], ["learn", GraduationCap, "Learn"], ["profile", User, "Profile"]];
 
   return (
     <div className="relative min-h-screen pb-28 sm:pb-10" style={{ paddingLeft: "max(16px, env(safe-area-inset-left))", paddingRight: "max(16px, env(safe-area-inset-right))" }}>
@@ -203,9 +203,9 @@ export default function App() {
       </main>
 
       <nav className="fixed inset-x-0 bottom-0 z-20 border-t sm:hidden" style={{ background: "rgba(0,0,0,.82)", backdropFilter: "blur(14px)", borderColor: "var(--line)", paddingBottom: "env(safe-area-inset-bottom)", paddingLeft: "env(safe-area-inset-left)", paddingRight: "env(safe-area-inset-right)" }} aria-label="Main">
-        <div className="mx-auto grid max-w-md grid-cols-4 gap-1 p-2 text-xs font-medium">
+        <div className="mx-auto grid max-w-md grid-cols-5 gap-1 p-2 text-xs font-medium">
           {NAV.map(([k, I, label]) => (
-            <button key={k} onClick={() => setTab(k)} className={`relative flex flex-col items-center gap-1 rounded-xl px-2 py-2 ${tab === k ? "bg-white/10 text-white" : "text-zinc-500"}`} aria-current={tab === k ? "page" : undefined}>
+            <button key={k} onClick={() => setTab(k)} className={`relative flex flex-col items-center gap-1 rounded-xl px-2 py-2 ${tab === k ? "bg-white/10 text-white" : "text-zinc-400"}`} aria-current={tab === k ? "page" : undefined}>
               <I size={18} />{label}
               {k === "alerts" && alertDot && <span className="dot absolute right-6 top-1.5 !h-1.5 !w-1.5" style={{ background: "var(--red)" }} />}
             </button>
@@ -333,8 +333,9 @@ function Home({ r, openLine, setWhy, txns, go }: { r: NumberResult; openLine: (l
       </section>
 
       {/* Two boxes */}
-      <section className="grid gap-4 md:grid-cols-2">
-        <div className="card flex flex-col p-6">
+      {/* grid-cols-1 + min-w-0: a long feed row must not widen the column past the phone screen */}
+      <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="card flex min-w-0 flex-col p-6">
           <div className="flex items-center justify-between gap-2"><Label icon={Lock}>1 · Pay by {fmtDate(payBy)}</Label><span className="rounded-full border border-zinc-700 px-2.5 py-0.5 text-[11px] text-zinc-300">fixed</span></div>
           <div className="font-display num mt-4 text-5xl font-semibold">{usd(r.owedSoFarCents)}</div>
           <div className="mt-1 text-sm text-zinc-400">Due <b className="text-white">{fmtDate(payBy, true)}</b> · {days(payBy)} days from now</div>
@@ -350,10 +351,10 @@ function Home({ r, openLine, setWhy, txns, go }: { r: NumberResult; openLine: (l
             </ul>
           )}
           {anyLate && <p className="muted mt-3 text-xs">Late parts add a small IRS penalty until they're paid. Paying sooner keeps it small.</p>}
-          <button className="btn btn-primary w-full" style={{ marginTop: "auto" }} onClick={() => go("settle")}><Sparkles size={15} />Settle this now <ArrowRight size={15} /></button>
+          <button className="btn btn-primary w-full" style={{ marginTop: "auto" }} onClick={() => go("settle")}>Settle this now <ArrowRight size={15} /></button>
         </div>
 
-        <div className="card hero-glow flex flex-col p-6">
+        <div className="card hero-glow flex min-w-0 flex-col p-6">
           <div className="flex items-center justify-between gap-2"><Label icon={CalendarClock}>2 · New money · through {live ? fmtDate(live.end) : fmtDate(payBy)}</Label><span className="flex items-center gap-1.5 text-xs text-zinc-400"><span className="dot live-dot" style={{ background: "var(--green)" }} />live</span></div>
           <div className="mt-4 font-display num text-4xl font-semibold transition-colors duration-500" style={{ color: flash === "in" ? "var(--green)" : flash === "out" ? "var(--red)" : undefined }}>{newTaxShown < 0 ? "−" : "+"}{usd(Math.abs(newTaxShown))}</div>
           <div className="mt-1 text-sm text-zinc-400">Extra tax on what you earn from now through <b className="text-white">{live ? fmtDate(live.end, true) : fmtDate(payBy, true)}</b>{live && <> &mdash; {days(live.end)} days to go</>}.</div>
@@ -370,7 +371,7 @@ function Home({ r, openLine, setWhy, txns, go }: { r: NumberResult; openLine: (l
               </li>
             ))}
           </ul>
-          <p className="mt-4 text-[11px] text-zinc-500">Demo: new money is simulated and updates every 10 seconds.</p>
+          <p className="mt-4 text-xs text-zinc-400">Demo: new money is simulated and updates every 10 seconds.</p>
         </div>
       </section>
 
@@ -397,10 +398,9 @@ function Settle({ r }: { r: NumberResult }) {
   return (
     <section className="mx-auto max-w-md space-y-5">
       <div className="text-center">
-        <span className="chip text-zinc-300"><Sparkles size={13} />The game-changer</span>
         <h1 className="font-display mt-3 text-4xl font-semibold">Settle up</h1>
         <p className="muted mt-1">Pay the IRS without the maze.</p>
-        <p className="mx-auto mt-3 max-w-sm text-[11px] leading-relaxed text-zinc-500">AI can make mistakes &mdash; double-check the amount and your details on the IRS page before you pay. This is an educational estimate, not tax advice.</p>
+        <p className="mx-auto mt-3 max-w-sm text-xs leading-relaxed text-zinc-400">AI can make mistakes &mdash; double-check the amount and your details on the IRS page before you pay. This is an educational estimate, not tax advice.</p>
       </div>
 
       <div className="card hero-glow p-7 text-center sm:p-8">
@@ -415,7 +415,7 @@ function Settle({ r }: { r: NumberResult }) {
 
       <div className="text-center">
         <p className="text-[15px] font-semibold">Your exact number, then the IRS maze in <span className="num">~30 seconds</span>.</p>
-        <p className="muted mx-auto mt-1 max-w-sm text-[11px] leading-relaxed">
+        <p className="muted mx-auto mt-1 max-w-sm text-xs leading-relaxed">
           Over half of small-business owners lose <span className="text-zinc-300">40+ hours a year</span> to federal taxes, and about <span className="text-zinc-300">1 in 3</span> aren&apos;t even sure they owe estimated tax. The Number computes it and walks you through paying.
           <br />
           <a className="underline underline-offset-2 hover:text-white" href="https://taxfoundation.org/tax-complexity-expensive-small-businesses" target="_blank" rel="noreferrer">Tax Foundation / NSBA Survey</a>
@@ -772,12 +772,12 @@ function Learn({ r }: { r: NumberResult }) {
   const months = [3, 2, 3, 4];
   const cards: [string, string, React.ReactNode][] = [
     ["01", "What is The Number?", <>How much you owe the IRS for your business this year, after anything you've already paid. One number, always up to date.</>],
-    ["00", "Am I a sole proprietor?", <>If you run a business by yourself and never formed an LLC or corporation, yes, automatically. You and the business are the same for taxes: profit goes on <b>Schedule C</b> of your own return, and nobody takes tax out for you (<a className="underline" href={SOURCES.soleProprietor} target="_blank" rel="noreferrer">IRS</a>).</>],
-    ["02", "Self-employment tax (the one nobody tells you about)", <>When you have a job, your boss pays half your Social Security and Medicare. When you work for yourself, you pay both halves: <b>15.3% on 92.35% of your profit</b>. It starts at <b>$400 of profit, at any age</b> (<a className="underline" href={SOURCES.youngEntrepreneurs} target="_blank" rel="noreferrer">IRS</a>). For you that's <b>{formatUSD(r.fed.se.totalCents)}</b>.</>],
-    ["03", "Why do I owe tax if I'm under the limit?", <>The {formatUSD(TAX_2026.standardDeductionCents)} standard deduction only shields you from <i>income</i> tax. That's why your income tax is {formatUSD(r.fed.incomeTaxCents)}. It doesn't cover self-employment tax at all.</>],
-    ["04", "Paying the IRS during the year", <>Nobody withholds tax from your Cash App, so the IRS expects <b>estimated payments</b> four times a year. Pay at <a className="underline" href="https://www.irs.gov/payments" target="_blank" rel="noreferrer">irs.gov/payments</a>. Paying late adds a small penalty, and paying a bit each month avoids it.</>],
+    ["02", "Am I a sole proprietor?", <>If you run a business by yourself and never formed an LLC or corporation, yes, automatically. You and the business are the same for taxes: profit goes on <b>Schedule C</b> of your own return, and nobody takes tax out for you (<a className="underline" href={SOURCES.soleProprietor} target="_blank" rel="noreferrer">IRS</a>).</>],
+    ["03", "Self-employment tax (the one nobody tells you about)", <>When you have a job, your boss pays half your Social Security and Medicare. When you work for yourself, you pay both halves: <b>15.3% on 92.35% of your profit</b>. It starts at <b>$400 of profit, at any age</b> (<a className="underline" href={SOURCES.youngEntrepreneurs} target="_blank" rel="noreferrer">IRS</a>). For you that's <b>{formatUSD(r.fed.se.totalCents)}</b>.</>],
+    ["04", "Why do I owe tax if I'm under the limit?", <>The {formatUSD(TAX_2026.standardDeductionCents)} standard deduction only shields you from <i>income</i> tax. That's why your income tax is {formatUSD(r.fed.incomeTaxCents)}. It doesn't cover self-employment tax at all.</>],
+    ["05", "Paying the IRS during the year", <>Nobody withholds tax from your Cash App, so the IRS expects <b>estimated payments</b> four times a year. Pay at <a className="underline" href="https://www.irs.gov/payments" target="_blank" rel="noreferrer">irs.gov/payments</a>. Paying late adds a small penalty, and paying a bit each month avoids it.</>],
     ["06", "The 20% small-business deduction", <>Sole proprietors can knock up to 20% off their business profit for income tax (the QBI deduction). We include it, so your number isn't inflated (<a className="underline" href={SOURCES.qbi} target="_blank" rel="noreferrer">IRS</a>).</>],
-    ["05", "Business vs. personal on payment apps", <>Mixing them makes your profit look bigger (more tax) or smaller (trouble later). Tag every payment, or better, use a separate business profile.</>],
+    ["07", "Business vs. personal on payment apps", <>Mixing them makes your profit look bigger (more tax) or smaller (trouble later). Tag every payment, or better, use a separate business profile.</>],
   ];
   return (
     <>
@@ -792,14 +792,14 @@ function Learn({ r }: { r: NumberResult }) {
               <div className="font-display num text-4xl font-semibold">{x.big}</div>
               <div className="mt-2 text-sm font-medium">{x.what}</div>
               <div className="muted mt-2 text-xs leading-relaxed">{x.means(r)}</div>
-              <a href={x.url} target="_blank" rel="noreferrer" className="mt-auto pt-3 text-[11px] text-zinc-500 underline-offset-2 hover:underline">{x.src}</a>
+              <a href={x.url} target="_blank" rel="noreferrer" className="mt-auto pt-3 text-xs text-zinc-400 underline-offset-2 hover:underline">{x.src}</a>
             </div>
           ))}
         </div>
       </section>
       <div className="grid gap-4 md:grid-cols-2">
         {cards.map(([n, title, body]) => (
-          <details key={title} className="card group p-6" open={n === "02"}>
+          <details key={title} className="card group p-6" open={n === "03"}>
             <summary className="flex cursor-pointer list-none items-center gap-4 font-semibold"><span className="font-mono text-xs text-zinc-500">{n}</span>{title}<span className="muted ml-auto text-sm transition group-open:rotate-180">⌄</span></summary>
             <p className="mt-3 text-sm leading-relaxed text-zinc-300">{body}</p>
           </details>
@@ -824,7 +824,7 @@ function Learn({ r }: { r: NumberResult }) {
       </section>
       <details className="card p-6 text-sm"><summary className="cursor-pointer font-semibold">Assumptions and sources</summary>
         <ul className="muted mt-2 list-disc space-y-1 pl-5">{ASSUMPTIONS.map((a) => <li key={a}>{a}</li>)}</ul>
-        <ul className="mt-2 space-y-1">{Object.entries(SOURCES).map(([k, u]) => <li key={k}><a className="underline" href={u} target="_blank" rel="noreferrer">{k}</a></li>)}</ul>
+        <ul className="mt-2 space-y-1">{Object.entries(SOURCES).map(([k, u]) => <li key={k}><a className="underline" href={u} target="_blank" rel="noreferrer">{SOURCE_TITLES[k as keyof typeof SOURCES]}</a></li>)}</ul>
       </details>
     </>
   );
@@ -833,10 +833,29 @@ function Learn({ r }: { r: NumberResult }) {
 /* ---------- Why sheet ---------- */
 
 function WhySheet({ title, body, txns, onClose }: Why & { onClose: () => void }) {
-  useEffect(() => { const k = (e: KeyboardEvent) => e.key === "Escape" && onClose(); window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, [onClose]);
+  // Takes focus when it opens, keeps Tab inside, closes on Escape, and hands focus back to whatever opened it.
+  const panel = useRef<HTMLDivElement>(null);
+  const close = useRef(onClose); close.current = onClose;
+  useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
+    // preventScroll: on phones, focusing inside the bottom sheet must not shift the visible area (it pushed the tab bar off screen).
+    panel.current?.querySelector<HTMLElement>("button")?.focus({ preventScroll: true });
+    const k = (e: KeyboardEvent) => {
+      if (e.key === "Escape") return close.current();
+      if (e.key !== "Tab" || !panel.current) return;
+      const f = [...panel.current.querySelectorAll<HTMLElement>("button, a[href]")];
+      const first = f[0], last = f[f.length - 1];
+      if (!first) return;
+      if (!panel.current.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+      else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    };
+    window.addEventListener("keydown", k);
+    return () => { window.removeEventListener("keydown", k); opener?.focus({ preventScroll: true }); };
+  }, []);
   return (
     <div className="fixed inset-0 z-30 grid place-items-end bg-black/70 backdrop-blur-sm sm:place-items-center" onClick={onClose} role="dialog" aria-modal="true" aria-label={title}>
-      <div className="toast relative max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-t-[28px] border border-zinc-800 bg-[#0b0b0b] p-7 sm:m-4 sm:rounded-[28px]" onClick={(e) => e.stopPropagation()}>
+      <div ref={panel} className="toast relative max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-t-[28px] border border-zinc-800 bg-[#0b0b0b] p-7 sm:m-4 sm:rounded-[28px]" onClick={(e) => e.stopPropagation()}>
         <button className="absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-full border border-zinc-800 text-zinc-400 hover:text-white" onClick={onClose} aria-label="Close"><X size={16} /></button>
         <Label>Why?</Label>
         <h3 className="font-display mt-2 pr-10 text-2xl font-semibold">{title}</h3>

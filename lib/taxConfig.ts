@@ -14,6 +14,17 @@ export const SOURCES = {
   qbi: "https://www.irs.gov/newsroom/qualified-business-income-deduction",
 };
 
+// Human titles for the links above, as each page titles itself (checked Nov 12, 2026).
+export const SOURCE_TITLES: Record<keyof typeof SOURCES, string> = {
+  irs2026: "IRS: Tax inflation adjustments for tax year 2026",
+  ssWageBase: "Journal of Accountancy: Social Security wage base for 2026",
+  seTax: "IRS: Self-employment tax (Social Security and Medicare taxes)",
+  youngEntrepreneurs: "IRS: Young entrepreneurs and taxes",
+  estimatedTaxes: "IRS: Estimated taxes",
+  soleProprietor: "IRS: Sole proprietorships",
+  qbi: "IRS: Qualified business income deduction",
+};
+
 export const TAX_2026 = {
   // Self-employment tax: 12.4% Social Security + 2.9% Medicare, on 92.35% of net SE earnings.
   socialSecurityBps: 1240,

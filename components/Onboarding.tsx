@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, Check, Loader2, Moon, Sun, Landmark, Lock, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Loader2, Moon, Sun, Landmark, Lock, ShieldCheck, Timer } from "lucide-react";
 import type { Profile, Txn } from "@/lib/types";
 import { PlaidButton } from "./PlaidButton";
 
@@ -56,7 +56,7 @@ const pad = { paddingLeft: "max(16px, env(safe-area-inset-left))", paddingRight:
 
 export function Landing({ onStart, onDemo, onSignIn, busy }: { onStart: () => void; onDemo: () => void; onSignIn: () => void; busy?: boolean }) {
   return (
-    <div className="relative flex h-screen flex-col overflow-hidden bg-black">
+    <div className="relative flex min-h-screen flex-col overflow-hidden bg-black">
       <MoneyBackdrop />
       <header className="relative z-10 mx-auto flex w-full max-w-6xl shrink-0 items-center justify-between py-5" style={pad}>
         <Wordmark size={36} />
@@ -69,7 +69,7 @@ export function Landing({ onStart, onDemo, onSignIn, busy }: { onStart: () => vo
         <p className="rise mt-4 max-w-2xl text-[clamp(1.15rem,2.4vw,1.55rem)] font-medium leading-snug text-white" style={{ textWrap: "balance" as never }}>
           See exactly what you owe the IRS, and when. Built for first-time business owners.
         </p>
-        <div className="rise mt-6 w-full max-w-2xl rounded-[28px] border border-white/15 bg-white/[0.04] px-6 py-5 backdrop-blur sm:px-8">
+        <div className="rise mt-6 w-full max-w-2xl rounded-[28px] border border-white/15 bg-[#0c0c0c]/90 px-6 py-5 backdrop-blur sm:px-8">
           <div className="flex flex-col items-center gap-2 sm:flex-row sm:gap-6 sm:text-left">
             <div className="font-display num shrink-0 text-[clamp(3.5rem,9vw,5.5rem)] font-semibold leading-none">15.7M</div>
             <div>
@@ -77,7 +77,7 @@ export function Landing({ onStart, onDemo, onSignIn, busy }: { onStart: () => vo
               <div className="muted mt-1 text-sm">This year a record <b className="text-white">4.9 million</b> Americans started a business, and with <b className="text-white">1 in 3</b> owners not even knowing they owe the IRS every quarter, that's <b className="text-white">1.6 million</b> new owners headed for a bill they never saw coming.</div>
             </div>
           </div>
-          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-zinc-500 sm:text-left">
+          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-400 sm:text-left">
             <a className="underline-offset-2 hover:underline" href="https://galek.tax/insights/data-analysis/irs-penalty-trends" target="_blank" rel="noreferrer">IRS Data Book FY2025</a>
             <a className="underline-offset-2 hover:underline" href="https://sbecouncil.org/2026/10/31/americas-entrepreneurship-surge-continues-nearly-5-million-business-applications-filed-through-september/" target="_blank" rel="noreferrer">Source: U.S. Census Business Formation Statistics, Jan–Sep 2026</a>
             <a className="underline-offset-2 hover:underline" href="https://american.edu/media/news/20230418_CarolineBrucknerTaxLiteracySurvey.cfm" target="_blank" rel="noreferrer">American University Kogod, Small Business Tax Literacy Survey</a>
@@ -85,11 +85,12 @@ export function Landing({ onStart, onDemo, onSignIn, busy }: { onStart: () => vo
         </div>
         <div className="rise mt-7 flex flex-col items-center gap-3">
           <button className="btn btn-primary min-w-[220px] !rounded-xl !py-3.5 text-base" onClick={onStart}>Get Started <ArrowRight size={16} /></button>
-          <span className="text-xs text-zinc-500">Connects with your bank through Plaid, and with QuickBooks</span>
+          <span className="text-xs text-zinc-400">Connects with your bank through Plaid, and with QuickBooks</span>
           <button className="inline-flex items-center gap-2 text-sm text-zinc-400 underline-offset-4 hover:text-white hover:underline" onClick={onDemo} disabled={busy} aria-busy={busy || undefined}>{busy ? <><Loader2 size={14} className="animate-spin motion-reduce:animate-none" aria-hidden />Loading a live example…</> : "or see a live example first"}</button>
         </div>
       </main>
-      <div className="horizon pointer-events-none" aria-hidden />
+      {/* Hidden on phones: there the call to action and its small print land right on the glow and can't be read. */}
+      <div className="horizon pointer-events-none hidden sm:block" aria-hidden />
     </div>
   );
 }
@@ -98,15 +99,15 @@ export function Landing({ onStart, onDemo, onSignIn, busy }: { onStart: () => vo
 
 export function MoneyBackdrop() {
   // Money comes in from the left (bank, Cash App, card, P2P), flows green into the # hub,
-  // which shows the number and sends a red slice to the IRS on the right. The centre column
-  // is dimmed so page text stays readable; the flow lives bright in the margins.
-  const HUB_X = 980, HUB_Y = 384;
+  // which sends a red slice to the IRS on the right. The centre column is dimmed so page text
+  // stays readable; the flow lives in the margins. The drawing is scaled to fit the screen
+  // ("meet"), so nothing is cut off at an edge, and it is left out below laptop width.
+  const HUB_X = 1080, HUB_Y = 384;
   const nodes: [number, number, string][] = [
-    [120, 150, "bank"], [96, 330, "cash"], [150, 548, "card"], [250, 232, "dot"], [224, 452, "pay"],
+    [110, 140, "bank"], [70, 330, "cash"], [130, 560, "card"], [170, 236, "dot"], [150, 450, "pay"],
   ];
   const S = nodes.map(([x, y]) => `M${x + 20},${y} C${(x + HUB_X) / 2 + 40},${y} ${(x + HUB_X) / 2 - 10},${HUB_Y} ${HUB_X - 10},${HUB_Y + (y - 330) * 0.06}`);
-  const HUB_NUM = `M${HUB_X + 150},${HUB_Y - 18} C${HUB_X + 230},${HUB_Y - 40} ${HUB_X + 250},${HUB_Y - 150} ${HUB_X + 196},${HUB_Y - 196}`;
-  const HUB_IRS = `M${HUB_X + 150},${HUB_Y + 18} C${HUB_X + 220},${HUB_Y + 46} ${HUB_X + 250},${HUB_Y + 150} ${HUB_X + 224},${HUB_Y + 196}`;
+  const HUB_IRS = `M${HUB_X + 54},${HUB_Y + 18} C${HUB_X + 90},${HUB_Y + 40} ${HUB_X + 110},${HUB_Y + 80} ${HUB_X + 103},${HUB_Y + 120}`;
   return (
     <div className="pointer-events-none fixed inset-0 overflow-hidden" aria-hidden>
       <style>{`
@@ -121,7 +122,7 @@ export function MoneyBackdrop() {
       {/* diagonal hatch + green (money in) / red (owed) corner glows */}
       <div className="absolute inset-0 opacity-[0.5]" style={{ backgroundImage: "repeating-linear-gradient(135deg, rgba(255,255,255,.035) 0 1px, transparent 1px 11px)" }} />
       <div className="absolute inset-0" style={{ background: "radial-gradient(60% 55% at 6% 2%, color-mix(in srgb, var(--green) 20%, transparent), transparent 70%), radial-gradient(60% 55% at 100% 104%, color-mix(in srgb, var(--red) 17%, transparent), transparent 70%)" }} />
-      <svg className="absolute left-1/2 top-1/2 h-[135%] w-[135%] min-w-[1240px] -translate-x-1/2 -translate-y-1/2" viewBox="0 0 1240 760" preserveAspectRatio="xMidYMid slice">
+      <svg className="absolute inset-0 hidden h-full w-full lg:block" viewBox="0 0 1240 760" preserveAspectRatio="xMidYMid meet">
         <defs>
           {/* dim a vertical column down the middle, where page text sits */}
           <linearGradient id="mb-col" x1="0" y1="0" x2="1" y2="0">
@@ -132,12 +133,11 @@ export function MoneyBackdrop() {
           <radialGradient id="mb-hub" cx="50%" cy="50%" r="50%"><stop offset="0" stopColor="rgba(255,255,255,.12)" /><stop offset="1" stopColor="transparent" /></radialGradient>
         </defs>
         <g mask="url(#mb-mask)" opacity="0.72">
-          <circle cx={HUB_X + 60} cy={HUB_Y} r="250" fill="url(#mb-hub)" />
+          <circle cx={HUB_X + 20} cy={HUB_Y} r="250" fill="url(#mb-hub)" />
 
           {/* connectors */}
           <g fill="none" strokeWidth="1.3">
             {S.map((d, i) => <path key={i} d={d} stroke="rgba(110,231,160,.26)" className="mb-dash" />)}
-            <path d={HUB_NUM} stroke="rgba(255,255,255,.26)" className="mb-dash" />
             <path d={HUB_IRS} stroke="rgba(248,113,113,.5)" className="mb-dash" />
           </g>
 
@@ -147,19 +147,20 @@ export function MoneyBackdrop() {
               <animateMotion dur={`${2.6 + i * 0.35}s`} begin={`${i * 0.45}s`} repeatCount="indefinite" path={d} />
             </circle>
           ))}
-          <circle r="3.4" className="mb-pkt" fill="#ffffff"><animateMotion dur="2.9s" repeatCount="indefinite" path={HUB_NUM} /></circle>
           <circle r="3.6" className="mb-pkt" fill="var(--red)"><animateMotion dur="3.1s" begin=".4s" repeatCount="indefinite" path={HUB_IRS} /></circle>
 
           {/* source nodes (left) */}
           {nodes.map(([x, y, kind], i) => (
-            <g key={i} transform={`translate(${x},${y})`} className="mb-float" style={{ animationDelay: `${i * 0.8}s`, transformBox: "fill-box", transformOrigin: "center" } as React.CSSProperties}>
+            // Position lives on the outer group; the float animates the inner one. A CSS transform on the
+            // same element would replace the SVG translate and snap the tile to the top-left corner.
+            <g key={i} transform={`translate(${x},${y})`}><g className="mb-float" style={{ animationDelay: `${i * 0.8}s`, transformBox: "fill-box", transformOrigin: "center" } as React.CSSProperties}>
               <rect x="-18" y="-18" width="36" height="36" rx="10" fill="#0d0d0d" stroke="rgba(255,255,255,.18)" />
               {kind === "cash" && <text x="0" y="6" textAnchor="middle" fontSize="18" fontWeight="800" fill="var(--green)">$</text>}
               {kind === "pay" && <text x="0" y="5" textAnchor="middle" fontSize="13" fontWeight="800" fill="rgba(255,255,255,.78)">P2P</text>}
               {kind === "bank" && <g stroke="rgba(255,255,255,.75)" strokeWidth="1.5" fill="none" strokeLinecap="round"><path d="M-9,-3 L0,-10 L9,-3" /><path d="M-7,-2 V7 M-2.5,-2 V7 M2.5,-2 V7 M7,-2 V7" /><path d="M-10,9 H10" /></g>}
               {kind === "card" && <g stroke="rgba(255,255,255,.75)" strokeWidth="1.5" fill="none"><rect x="-10" y="-7" width="20" height="14" rx="2.5" /><path d="M-10,-1.5 H10" /></g>}
               {kind === "dot" && <circle r="4.5" fill="var(--green)" className="mb-pulse" />}
-            </g>
+            </g></g>
           ))}
 
           {/* the # hub — just the logo mark, so nothing gets cut at the screen edge */}
@@ -170,16 +171,8 @@ export function MoneyBackdrop() {
             <text x="30" y="37" textAnchor="middle" fontSize="20" fontWeight="800" fill="#000">#</text>
           </g>
 
-          {/* number card (upper right) */}
-          <g transform={`translate(${HUB_X + 58},${HUB_Y - 338})`} className="mb-float" style={{ animationDelay: "1.2s", transformBox: "fill-box", transformOrigin: "center" } as React.CSSProperties}>
-            <rect x="0" y="0" width="240" height="152" rx="14" fill="#0b0b0c" stroke="rgba(255,255,255,.18)" />
-            <text x="20" y="40" fontSize="11" letterSpacing="1.5" fill="rgba(255,255,255,.42)" fontFamily="ui-monospace, monospace">YOU OWE THE IRS</text>
-            <text x="20" y="84" fontSize="38" fontWeight="800" fill="#fafafa" fontFamily="ui-sans-serif, system-ui">$5,281</text>
-            {[26, 40, 22, 46, 32, 50, 38].map((h, j) => <rect key={j} x={20 + j * 29} y={134 - h} width="15" height={h} rx="2" fill="rgba(255,255,255,.28)" />)}
-          </g>
-
           {/* IRS node (lower right, red) */}
-          <g transform={`translate(${HUB_X + 196},${HUB_Y + 176})`} className="mb-pulse">
+          <g transform={`translate(${HUB_X + 70},${HUB_Y + 120})`} className="mb-pulse">
             <rect x="0" y="0" width="66" height="38" rx="11" fill="#140c0c" stroke="rgba(248,113,113,.55)" />
             <text x="33" y="25" textAnchor="middle" fontSize="13" fontWeight="800" fill="var(--red)">IRS</text>
           </g>
@@ -220,7 +213,7 @@ function Shell({ children, step, onBack, onHome }: { children: React.ReactNode; 
       <div className="pointer-events-none fixed inset-x-0 top-0 h-[60vh]" style={{ background: "radial-gradient(60% 60% at 50% 0%, rgba(255,255,255,.08), transparent 70%)" }} />
       <header className="relative z-10 mx-auto flex max-w-6xl items-center justify-between py-5">
         <button onClick={onHome} aria-label="The Number, home"><Wordmark size={34} /></button>
-        <div className="flex items-center gap-4"><ol className="flex items-center gap-2 text-xs font-medium text-zinc-500" aria-label="Setup progress">
+        <div className="flex items-center gap-4"><ol className="flex items-center gap-2 text-xs font-medium text-zinc-400" aria-label="Setup progress">
           {["Account", "Plan", "Connect"].map((s, i) => (
             <li key={s} className="flex items-center gap-2"><span className={`grid h-6 w-6 place-items-center rounded-full border ${i < step ? "border-white bg-white text-black" : i === step ? "border-white text-white" : "border-zinc-700"}`}>{i < step ? <Check size={13} /> : i + 1}</span><span className={`hidden sm:inline ${i === step ? "text-white" : ""}`}>{s}</span>{i < 2 && <span className="mx-1 hidden h-px w-6 bg-zinc-700 sm:inline-block" />}</li>
           ))}
@@ -256,8 +249,8 @@ export function SignUp({ onDone, onBack, onHome, draft, onDraft }: { onDone: (a:
         <div className="hidden lg:block">
           <h1 className="headline font-display text-6xl font-semibold leading-[0.98]">Your money,<br />finally explained.</h1>
           <ul className="mt-8 space-y-4 text-zinc-400">
-            {[[Sparkles, "See your Number in under a minute"], [ShieldCheck, "Bank connection through Plaid. We never move money"], [Lock, "Parents can follow along, read-only"]].map(([I, t]) => {
-              const Icon = I as typeof Sparkles;
+            {[[Timer, "See your Number in under a minute"], [ShieldCheck, "Bank connection through Plaid. We never move money"], [Lock, "Parents can follow along, read-only"]].map(([I, t]) => {
+              const Icon = I as typeof Timer;
               return <li key={t as string} className="flex items-center gap-3"><span className="grid h-9 w-9 place-items-center rounded-full border border-zinc-800"><Icon size={16} /></span>{t as string}</li>;
             })}
           </ul>
@@ -269,7 +262,7 @@ export function SignUp({ onDone, onBack, onHome, draft, onDraft }: { onDone: (a:
             <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden><path fill="#fff" d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.7 3-4.3 3-7.3Z"/><path fill="#bbb" d="M12 22c2.7 0 5-.9 6.6-2.4l-3.2-2.5c-.9.6-2 1-3.4 1-2.6 0-4.8-1.8-5.6-4.1H3.1v2.6A10 10 0 0 0 12 22Z"/><path fill="#888" d="M6.4 14c-.2-.6-.3-1.3-.3-2s.1-1.4.3-2V7.4H3.1a10 10 0 0 0 0 9.2L6.4 14Z"/><path fill="#ddd" d="M12 6c1.5 0 2.8.5 3.8 1.5l2.9-2.9A10 10 0 0 0 3.1 7.4L6.4 10C7.2 7.7 9.4 6 12 6Z"/></svg>
             Continue with Google (demo)
           </button>
-          <div className="my-6 flex items-center gap-3 text-xs text-zinc-500"><span className="h-px flex-1 bg-zinc-800" />or<span className="h-px flex-1 bg-zinc-800" /></div>
+          <div className="my-6 flex items-center gap-3 text-xs text-zinc-400"><span className="h-px flex-1 bg-zinc-800" />or<span className="h-px flex-1 bg-zinc-800" /></div>
           <label className="block text-sm font-medium" htmlFor="su-name">First name</label>
           <input id="su-name" className="input mt-1.5" value={name} onChange={(e) => setName(e.target.value)} placeholder="Jay" autoComplete="given-name" />
           <label className="mt-4 block text-sm font-medium" htmlFor="su-email">Email</label>
@@ -278,7 +271,7 @@ export function SignUp({ onDone, onBack, onHome, draft, onDraft }: { onDone: (a:
           <input id="su-biz" className="input mt-1.5" value={business} onChange={(e) => setBusiness(e.target.value)} placeholder="Pressure washing, lawn care, reselling…" />
           {err && <p className="mt-3 text-sm" style={{ color: "var(--red)" }}>{err}</p>}
           <button className="btn btn-primary mt-6 w-full !rounded-xl !py-3.5">Create account <ArrowRight size={16} /></button>
-          <p className="mt-4 text-center text-xs text-zinc-500">Hackathon demo: nothing is saved. Reloading starts over.</p>
+          <p className="mt-4 text-center text-xs text-zinc-400">Hackathon demo: nothing is saved. Reloading starts over.</p>
         </form>
       </div>
     </Shell>
@@ -303,7 +296,7 @@ export function Pricing({ onPick, onBack, onHome, current }: { name?: string; cu
         <div className="mt-12 grid items-stretch gap-5 text-left md:grid-cols-2">
           {PLANS.map((p) => (
             <div key={p.id} className={`relative flex flex-col rounded-[28px] p-8 ${p.popular ? "border-2 border-white bg-[#101010] shadow-[0_0_80px_rgba(255,255,255,.12)]" : "glass"}`}>
-              {p.popular && <span className="absolute -top-4 left-1/2 flex -translate-x-1/2 items-center gap-1.5 whitespace-nowrap rounded-full bg-white px-4 py-1.5 text-sm font-semibold text-black">★ Most popular</span>}
+              {p.popular && <span className="absolute -top-4 left-1/2 flex -translate-x-1/2 items-center gap-1.5 whitespace-nowrap rounded-full bg-white px-4 py-1.5 text-sm font-semibold text-black">Most popular</span>}
               <div className="text-center">
                 <div className="font-display text-2xl font-semibold">{p.name}</div>
                 {current === p.id && <span className="chip mt-2 text-zinc-300"><Check size={13} />Your current pick</span>}
@@ -319,7 +312,7 @@ export function Pricing({ onPick, onBack, onHome, current }: { name?: string; cu
             </div>
           ))}
         </div>
-        <p className="mt-8 text-xs text-zinc-500">Hackathon demo: no payment is taken.</p>
+        <p className="mt-8 text-xs text-zinc-400">Hackathon demo: no payment is taken.</p>
       </div>
     </Shell>
   );
@@ -541,7 +534,7 @@ export function Connect({ onPlaidSandbox, onQuickBooksSandbox, onPlaid, busy, er
             </div>
             <div className="mt-4">{live ? <PlaidButton onData={onPlaid} /> : <PlaidButton onSandbox={onPlaidSandbox} />}</div>
           </div>
-          <div className="flex items-center gap-3 text-xs text-zinc-500"><span className="h-px flex-1 bg-zinc-800" />or<span className="h-px flex-1 bg-zinc-800" /></div>
+          <div className="flex items-center gap-3 text-xs text-zinc-400"><span className="h-px flex-1 bg-zinc-800" />or<span className="h-px flex-1 bg-zinc-800" /></div>
           <div>
             <div className="flex items-center gap-4">
               <span className="grid h-12 w-12 place-items-center rounded-2xl border border-zinc-700 font-display text-lg font-bold">qb</span>
@@ -549,7 +542,7 @@ export function Connect({ onPlaidSandbox, onQuickBooksSandbox, onPlaid, busy, er
             </div>
             <div className="mt-4"><PlaidButton onSandbox={onQuickBooksSandbox} label="Connect QuickBooks" primary={false} /></div>
           </div>
-          <div className="flex items-center gap-3 text-xs text-zinc-500"><span className="h-px flex-1 bg-zinc-800" />payment apps<span className="h-px flex-1 bg-zinc-800" /></div>
+          <div className="flex items-center gap-3 text-xs text-zinc-400"><span className="h-px flex-1 bg-zinc-800" />payment apps<span className="h-px flex-1 bg-zinc-800" /></div>
           <div className="rounded-2xl border border-white/15 bg-white/[0.04] p-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -561,7 +554,7 @@ export function Connect({ onPlaidSandbox, onQuickBooksSandbox, onPlaid, busy, er
                 <div className="mt-1 text-xs leading-snug text-zinc-400">of sellers don't know when these apps report that income to the IRS.</div>
               </div>
             </div>
-            <div className="mt-2 flex flex-wrap gap-x-3 text-[10px] text-zinc-600">
+            <div className="mt-2 flex flex-wrap gap-x-3 text-xs text-zinc-400">
               <a className="underline" href="https://www.businessofapps.com/data/venmo-statistics/" target="_blank" rel="noreferrer">Business of Apps</a>
               <a className="underline" href="https://finance.yahoo.com/news/gig-workers-may-unprepared-2025-123000859.html" target="_blank" rel="noreferrer">Avalara survey</a>
             </div>
@@ -584,7 +577,7 @@ export function Connect({ onPlaidSandbox, onQuickBooksSandbox, onPlaid, busy, er
           {busy && <p className="text-center text-sm text-zinc-300">Pulling your transactions…</p>}
           {error && <p className="text-sm" style={{ color: "var(--red)" }}>{error}</p>}
         </div>
-        <div className="mx-auto mt-8 flex max-w-xl flex-wrap justify-center gap-x-6 gap-y-2 text-xs text-zinc-500">
+        <div className="mx-auto mt-8 flex max-w-xl flex-wrap justify-center gap-x-6 gap-y-2 text-xs text-zinc-400">
           <span className="flex items-center gap-1.5"><ShieldCheck size={14} /> Read-only</span>
           <span className="flex items-center gap-1.5"><Lock size={14} /> We never move money</span>
           <span className="flex items-center gap-1.5"><Check size={14} /> Disconnect anytime</span>
