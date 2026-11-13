@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { AlertTriangle, ArrowRight, Check, ChevronDown, Loader2, Lightbulb, Lock, ArrowUpRight, Bell, BookOpen, Briefcase, CalendarClock, Download, Eye, EyeOff, GraduationCap, Home as HomeIcon, Copy, Info, Landmark, LogOut, Octagon, Banknote, Printer, ShoppingBag, Terminal, User, Users, Wallet, X, Zap } from "lucide-react";
 import { classify } from "@/lib/classify";
 import { latestBalance, normalize } from "@/lib/csv";
@@ -11,6 +12,7 @@ import { randomFactor, scaleBusiness } from "@/lib/scale";
 import { ASSUMPTIONS, SOURCES, SOURCE_TITLES, TAX_2026, TAX_YEAR } from "@/lib/taxConfig";
 import { ASSUMPTION_LINE, calculationSteps } from "@/lib/steps";
 import { buildEstimatePdf } from "@/lib/pdf";
+import { formGuide, GUIDE_CHECKED, GUIDE_SOURCES } from "@/lib/guide";
 import type { Profile, Txn } from "@/lib/types";
 import { Connect, Landing, Logo, Pricing, SignUp, ThemeToggle, type Account } from "./Onboarding";
 
@@ -411,6 +413,7 @@ function Settle({ r }: { r: NumberResult }) {
   const dueStr = new Date(payBy + "T12:00:00Z").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
   const amountFmt = usd(r.owedSoFarCents);
   const [open, setOpen] = useState(false);
+  const [guide, setGuide] = useState(false);
 
   // Open the real IRS Direct Pay page, and walk the user through it step by step in-app.
   const start = () => { try { window.open(PAY_URL, "_blank", "noopener,noreferrer"); } catch { /* fine */ } setOpen(true); };
@@ -431,6 +434,7 @@ function Settle({ r }: { r: NumberResult }) {
           Pay guided <ArrowRight size={16} />
         </button>
         <p className="muted mt-2 text-xs">Opens the real IRS payment page and walks you through it, step by step. We never touch your money.</p>
+        <button className="btn btn-ghost mt-3 w-full !rounded-xl text-sm" onClick={() => setGuide(true)}><BookOpen size={16} />Where these numbers go: Form 1040-ES and Form 1040</button>
       </div>
 
       <div className="text-center">
@@ -445,6 +449,8 @@ function Settle({ r }: { r: NumberResult }) {
       </div>
 
       {open && <PayAssist r={r} amountFmt={amountFmt} year={TAX_YEAR} onClose={() => setOpen(false)} />}
+      {/* Rendered at the page root: inside <main> it sat under the phone tab bar. */}
+      {guide && createPortal(<WhySheet kicker="Form guide" title="Where these numbers go" body="" onClose={() => setGuide(false)}><FormGuide r={r} /></WhySheet>, document.body)}
     </section>
   );
 }
@@ -452,8 +458,9 @@ function Settle({ r }: { r: NumberResult }) {
 function PayAssist({ r, amountFmt, year, onClose }: { r: NumberResult; amountFmt: string; year: number; onClose: () => void }) {
   const amountRaw = (r.owedSoFarCents / 100).toFixed(2);
   const fields = [
-    { label: "Apply Payment To", verb: "Pick the form in the 1st dropdown", show: "1040-ES", copy: "1040ES" },
-    { label: "Reason for Payment", verb: "Then pick the reason", show: "Estimated Tax", copy: "Estimated Tax" },
+    // Order as the IRS describes it: reason first, then "Apply payment to" (Direct Pay help; types-of-payments table, checked Nov 12, 2026).
+    { label: "Reason for Payment", verb: "Pick the reason in the 1st dropdown", show: "Estimated tax", copy: "Estimated Tax" },
+    { label: "Apply Payment To", verb: "Then pick the form", show: "1040-ES", copy: "1040-ES" },
     { label: "Tax Period for Payment", verb: "Pick the year", show: String(year), copy: String(year) },
     { label: "Amount", verb: "Type or paste this amount — it's our estimate", show: amountFmt, copy: amountRaw },
   ];
@@ -505,7 +512,7 @@ function PayAssist({ r, amountFmt, year, onClose }: { r: NumberResult; amountFmt
           <a className="muted inline-flex items-center gap-1 hover:text-white" href={PAY_URL} target="_blank" rel="noreferrer">IRS page <ArrowUpRight size={12} /></a>
           <details className="text-right">
             <summary className="muted cursor-pointer list-none hover:text-white">Why these?</summary>
-            <p className="muted mt-2 max-w-[15rem] text-left text-[11px] leading-relaxed">You&apos;re making a quarterly estimated payment, so it&apos;s 1040-ES &rarr; Estimated Tax &rarr; {TAX_YEAR}. The amount is your estimated number &mdash; income minus expenses, run through SE tax, the deduction and your bracket.</p>
+            <p className="muted mt-2 max-w-[15rem] text-left text-[11px] leading-relaxed">You&apos;re making a quarterly estimated payment, so it&apos;s Estimated tax &rarr; 1040-ES &rarr; {TAX_YEAR}. The amount is your estimated number &mdash; income minus expenses, run through SE tax, the deduction and your bracket.</p>
           </details>
         </div>
       </div>
@@ -841,7 +848,31 @@ function Learn({ r }: { r: NumberResult }) {
 
 /* ---------- Why sheet ---------- */
 
-function WhySheet({ title, body, txns, onClose }: Why & { onClose: () => void }) {
+// Settle's form guide (G1): where each figure goes during the year (1040-ES) and at filing time (1040). It guides; the owner files.
+function FormGuide({ r }: { r: NumberResult }) {
+  const usd = (c: number) => formatUSD(c, { cents: true });
+  return (
+    <div className="mt-4 space-y-6">
+      {formGuide(r).map((sec) => (
+        <section key={sec.title} data-guide-section>
+          <h4 className="font-display text-lg font-semibold">{sec.title}</h4>
+          <p className="mt-1 text-sm text-zinc-400">{sec.intro}</p>
+          <dl className="mt-3 divide-y divide-zinc-800 text-sm">
+            {sec.rows.map((row) => (
+              <div key={row.id} className="py-2.5" data-guide-row={row.id} data-cents={row.cents}>
+                <div className="flex justify-between gap-3"><dt className="font-medium">{row.label}</dt><dd className="num shrink-0 text-right">{row.cents !== undefined ? usd(row.cents) : row.value}</dd></div>
+                <p className="mt-0.5 text-xs text-zinc-400">{row.where.replace(/\.$/, "")}. <a className="underline underline-offset-2 hover:text-white" href={GUIDE_SOURCES[row.source].url} target="_blank" rel="noreferrer">{GUIDE_SOURCES[row.source].title}</a></p>
+              </div>
+            ))}
+          </dl>
+        </section>
+      ))}
+      <p className="text-xs text-zinc-400">Form names and line numbers checked against IRS pages on {GUIDE_CHECKED}. This shows where the numbers go; you fill in and file the forms yourself.</p>
+    </div>
+  );
+}
+
+function WhySheet({ title, body, txns, onClose, kicker = "Why?", children }: Why & { onClose: () => void; kicker?: string; children?: React.ReactNode }) {
   // Takes focus when it opens, keeps Tab inside, closes on Escape, and hands focus back to whatever opened it.
   const panel = useRef<HTMLDivElement>(null);
   const close = useRef(onClose); close.current = onClose;
@@ -866,9 +897,10 @@ function WhySheet({ title, body, txns, onClose }: Why & { onClose: () => void })
     <div className="fixed inset-0 z-30 grid place-items-end bg-black/70 backdrop-blur-sm sm:place-items-center" onClick={onClose} role="dialog" aria-modal="true" aria-label={title}>
       <div ref={panel} className="toast relative max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-t-[28px] border border-zinc-800 bg-[#0b0b0b] p-7 sm:m-4 sm:rounded-[28px]" onClick={(e) => e.stopPropagation()}>
         <button className="absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-full border border-zinc-800 text-zinc-400 hover:text-white" onClick={onClose} aria-label="Close"><X size={16} /></button>
-        <Label>Why?</Label>
+        <Label>{kicker}</Label>
         <h3 className="font-display mt-2 pr-10 text-2xl font-semibold">{title}</h3>
-        <p className="mt-3 whitespace-pre-line leading-relaxed text-zinc-300">{body}</p>
+        {body && <p className="mt-3 whitespace-pre-line leading-relaxed text-zinc-300">{body}</p>}
+        {children}
         {txns && txns.length > 0 && (<><div className="muted mt-5 text-xs font-medium uppercase tracking-wider">From these transactions (latest)</div><ul className="divide-y">{txns.map((t) => <TxnRow key={t.id} t={t} />)}</ul></>)}
         <button className="btn btn-primary mt-6 w-full" onClick={onClose}>Got it</button>
       </div>
