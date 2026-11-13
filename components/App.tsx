@@ -46,6 +46,11 @@ export default function App() {
   const retryLoad = useRef<() => void>(() => {});
   const txnsRef = useRef<Txn[] | null>(null);
   txnsRef.current = txns;
+  const stageRef = useRef<Stage>("landing");
+  stageRef.current = stage;
+  // Bumped every time data is used (enter). A bank connection started before that belongs to an older visit and is ignored.
+  const epoch = useRef(0);
+  const plaidFor = (e: number) => (d: { txns: Txn[]; balances: Profile["balances"] }) => { if (e === epoch.current) onPlaid(d); };
   const planFromApp = useRef(false); // pricing was opened from inside the app ("Change plan"), not during setup
   const wantLanding = useRef(false);
   const lastFocus = useRef<HTMLElement | null>(null);
@@ -82,18 +87,20 @@ export default function App() {
     window.history.replaceState({ ...window.history.state, tn: "connect", i: 0 }, "", "/");
     if (q !== "connected") { setError("QuickBooks wasn't connected. Try again."); setStage("connect"); return; }
     setStage("connect"); setBusy("qbo");
+    const seq = ++loadSeq.current;
     fetch("/api/qbo/data").then(async (r) => {
       const j = await r.json();
       if (!r.ok) throw new Error(j.error);
+      if (loadSeq.current !== seq) return; // superseded (e.g. a CSV was used meanwhile)
       const last = (j.txns as Txn[]).reduce((m, t) => (t.date > m ? t.date : m), `${TAX_YEAR}-01-01`);
       setProfile({ ...DEMO_PROFILE, ownerName: "You", businessName: "Your business", age: 0, parentRule: undefined, balances: [], bills: [], asOf: new Date().toISOString().slice(0, 10) > last ? new Date().toISOString().slice(0, 10) : last });
       setTxns(j.txns); enter("QuickBooks (sandbox company), Profit & Loss");
-    }).catch((e) => setError((e as Error).message)).finally(() => setBusy(""));
+    }).catch((e) => { if (loadSeq.current === seq) setError((e as Error).message); }).finally(() => { if (loadSeq.current === seq) setBusy(""); });
   }, []);
   useEffect(() => { window.scrollTo(0, 0); }, [stage, tab]);
   const result = useMemo(() => (txns ? computeNumber(txns, profile) : null), [txns, profile]);
 
-  function enter(note: string) { loadSeq.current++; setBusy(""); setLoadFail(false); setSource(note); setTab("home"); go("app"); }
+  function enter(note: string) { loadSeq.current++; epoch.current++; setBusy(""); setLoadFail(false); setSource(note); setTab("home"); go("app"); }
 
   async function loadSampleBank(bank = "your bank", via: "plaid" | "qbo" = "plaid") {
     // One load at a time. A run that timed out or was retried is stale and must not change the screen.
@@ -137,6 +144,8 @@ export default function App() {
   }
 
   function onPlaid(data: { txns: Txn[]; balances: Profile["balances"] }) {
+    // A bank connection that finishes after the user already moved on (e.g. used a CSV) must not replace their data.
+    if (stageRef.current !== "connect") return;
     // Our Plaid Sandbox test user (Jay's business): pair the bank data with Jay's profile (age, bills he entered).
     if (data.balances.some((b) => b.name.startsWith("Jay's Pressure Washing"))) {
       setProfile({ ...DEMO_PROFILE, asOf: new Date().toISOString().slice(0, 10), balances: data.balances });
@@ -144,6 +153,15 @@ export default function App() {
     }
     setProfile({ ...DEMO_PROFILE, ownerName: account?.name || "You", businessName: account ? `${account.name}'s ${account.business.toLowerCase()}` : "Your business", age: 0, parentRule: undefined, balances: data.balances, bills: [], asOf: new Date().toISOString().slice(0, 10) });
     setTxns(data.txns); enter("Your bank via Plaid");
+  }
+
+  // "Upload a CSV instead": rows were read and tagged in the browser (lib/upload.ts); count them as this person's own data.
+  function onCsv(rows: Txn[]) {
+    const today = new Date().toISOString().slice(0, 10);
+    // Only this tax year's rows set the calculation date; rows from other years don't count and mustn't move it.
+    const last = rows.filter((t) => t.date.startsWith(String(TAX_YEAR))).reduce((m, t) => (t.date > m ? t.date : m), `${TAX_YEAR}-01-01`);
+    setProfile({ ...DEMO_PROFILE, ownerName: account?.name || "You", businessName: account?.business || "Your business", age: 0, parentRule: undefined, balances: [], bills: [], asOf: today > last ? today : last });
+    setTxns(rows); enter("Your CSV upload");
   }
 
   function setKind(id: string, kind: "business_income" | "personal" | "business_expense") {
@@ -162,7 +180,7 @@ export default function App() {
   if (stage === "signup") return <SignUp draft={draft} onDraft={setDraft} onBack={back} onHome={home} onDone={(a) => { setAccount({ ...a, plan: account?.plan }); go("pricing"); }} />;
   // Changing plan from inside the app goes straight back to the number; during setup the next step is still Connect.
   if (stage === "pricing") return <Pricing name={account?.name || "friend"} current={account?.plan} onBack={back} onHome={home} onPick={(plan) => { const toApp = planFromApp.current && !!txns; setAccount({ ...(account || { name: "", email: "", business: "" }), plan }); go(toApp ? "app" : "connect"); }} />;
-  if (stage === "connect" || !txns || !result) return <><div {...hush}><Connect onBack={back} onHome={home} onPlaidSandbox={loadSampleBank} onQuickBooksSandbox={(bank) => loadSampleBank(bank, "qbo")} onPlaid={onPlaid} busy={busy} error={error} /></div>{veil}</>;
+  if (stage === "connect" || !txns || !result) return <><div {...hush}><Connect onBack={back} onHome={home} onPlaidSandbox={loadSampleBank} onQuickBooksSandbox={(bank) => loadSampleBank(bank, "qbo")} onPlaid={plaidFor(epoch.current)} onCsv={onCsv} busy={busy} error={error} /></div>{veil}</>;
 
   const byId = new Map(txns.map((t) => [t.id, t]));
   const openLine = (l: Line) => setWhy({ title: l.label, body: l.why, txns: l.txnIds?.map((i) => byId.get(i)!).filter(Boolean).slice(-6) });

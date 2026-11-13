@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, Check, Loader2, Moon, Sun, Landmark, Lock, ShieldCheck, Timer } from "lucide-react";
-import type { Profile, Txn } from "@/lib/types";
+import type { Kind, Profile, Txn } from "@/lib/types";
+import { MAX_FILE_BYTES, readUploads, type UploadPreview } from "@/lib/upload";
+import { TAX_YEAR } from "@/lib/taxConfig";
 import { PlaidButton } from "./PlaidButton";
 
 export function Logo({ size = 40 }: { size?: number }) {
@@ -509,9 +511,70 @@ function PickSheet({ pick, onPick, onClose, busy }: { pick: Pick; onPick: (name:
   );
 }
 
+/* ---------------- CSV drop-off ---------------- */
+
+const TAG_LABEL: Record<Kind, string> = { business_income: "Business income", business_expense: "Business cost", personal: "Personal", transfer: "Between your accounts", tax_payment: "Tax payment", review: "Needs an answer" };
+// Unsorted rows count as income only when money came in (lib/number.ts); say which.
+const rowTag = (t: Txn) => (t.kind === "review" ? (t.amountCents > 0 ? "Needs an answer (counted as income)" : "Needs an answer (not counted)") : TAG_LABEL[t.kind]);
+const money = (c: number) => `$${(c / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+// Read statement CSVs in the browser only (nothing is uploaded anywhere), show what was found, and count it only on "Use".
+function CsvDrop({ onUse }: { onUse: (txns: Txn[]) => void }) {
+  const [preview, setPreview] = useState<UploadPreview | null>(null);
+  const [err, setErr] = useState("");
+  const [over, setOver] = useState(false);
+  const [status, setStatus] = useState("");
+  const gen = useRef(0); // only the latest selection may show its result
+  const read = async (list: FileList | null) => {
+    const mine = ++gen.current;
+    setErr(""); setPreview(null); setStatus("");
+    const files = [...(list || [])];
+    try {
+      const loaded = await Promise.all(files.map(async (f) => ({ name: f.name, size: f.size, text: f.size > MAX_FILE_BYTES ? "" : await f.text() })));
+      const p = readUploads(loaded);
+      if (mine !== gen.current) return;
+      setPreview(p); setStatus(`Read ${p.rows} rows from ${p.files.length} file${p.files.length === 1 ? "" : "s"}. Check them below before they count.`);
+    } catch (e) { if (mine === gen.current) setErr((e as Error).message); }
+  };
+  const outside = preview ? preview.txns.filter((t) => !t.date.startsWith(String(TAX_YEAR))).length : 0;
+  return (
+    <div>
+      <label htmlFor="csv-file" onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)} onDrop={(e) => { e.preventDefault(); setOver(false); read(e.dataTransfer.files); }}
+        className={`flex cursor-pointer flex-col items-center gap-1 rounded-2xl border border-dashed px-4 py-5 text-center text-sm transition-colors has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-white ${over ? "border-white bg-white/[0.06]" : "border-zinc-600 hover:border-zinc-400"}`}>
+        <input id="csv-file" type="file" accept=".csv,text/csv" multiple className="sr-only" onChange={(e) => { read(e.target.files); e.target.value = ""; }} />
+        <span className="font-medium">Upload a CSV instead</span>
+        <span className="text-xs text-zinc-400">Drop files here or choose them. Chase, Cash App, Venmo, or any CSV with date, description and amount columns. Up to 2 MB each. Read on this device only.</span>
+      </label>
+      <p className="sr-only" role="status">{status}</p>
+      {err && <p className="mt-2 text-sm" style={{ color: "var(--red)" }} role="alert">{err}</p>}
+      {preview && (
+        <div className="mt-3 rounded-2xl border border-zinc-800 p-4 text-sm" data-csv-preview>
+          <div className="font-medium">Check before it counts</div>
+          <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-zinc-300">
+            <dt className="text-zinc-400">Rows</dt><dd className="num text-right">{preview.rows} from {preview.files.length} file{preview.files.length === 1 ? "" : "s"}</dd>
+            <dt className="text-zinc-400">Dates</dt><dd className="num text-right">{preview.first} to {preview.last}</dd>
+            <dt className="text-zinc-400">Money in</dt><dd className="num text-right">{money(preview.inCents)}</dd>
+            <dt className="text-zinc-400">Money out</dt><dd className="num text-right">{money(preview.outCents)}</dd>
+          </dl>
+          <ul className="mt-3 space-y-0.5 text-xs text-zinc-300">{(Object.keys(TAG_LABEL) as Kind[]).filter((k) => preview.byKind[k]).map((k) => <li key={k} className="flex justify-between"><span>{TAG_LABEL[k]}</span><span className="num">{preview.byKind[k]}</span></li>)}</ul>
+          {outside > 0 && <p className="mt-2 text-xs text-zinc-300">{outside} row{outside === 1 ? " is" : "s are"} outside {TAX_YEAR} and won&apos;t count.</p>}
+          <details className="mt-3 text-xs"><summary className="cursor-pointer text-zinc-300 underline-offset-2 hover:underline">See how each row was tagged</summary>
+            <ul className="mt-2 max-h-56 divide-y divide-zinc-800 overflow-y-auto">{preview.txns.map((t) => <li key={t.id} className="py-1.5"><span className="block break-words text-zinc-300">{t.date} · {t.description || "(no note)"}</span><span className="block text-zinc-400">{money(Math.abs(t.amountCents))} {t.amountCents < 0 ? "out" : "in"} · {rowTag(t)}</span></li>)}</ul>
+          </details>
+          <p className="mt-3 text-xs text-zinc-400">Tags come from simple rules and can be wrong. Rows tagged &ldquo;Tax payment&rdquo; reduce this estimate, so check them.</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button className="btn btn-primary !rounded-xl" onClick={() => onUse(preview.txns)}>Use these transactions</button>
+            <button className="btn btn-ghost !rounded-xl" onClick={() => setPreview(null)}>Start over</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ---------------- Connect ---------------- */
 
-export function Connect({ onPlaidSandbox, onQuickBooksSandbox, onPlaid, busy, error, onBack, onHome }: { onPlaidSandbox: (bank: string) => void; onQuickBooksSandbox: (company: string) => void; onPlaid: (d: { txns: Txn[]; balances: Profile["balances"] }) => void; busy: string; error: string; onBack: () => void; onHome: () => void }) {
+export function Connect({ onPlaidSandbox, onQuickBooksSandbox, onPlaid, onCsv, busy, error, onBack, onHome }: { onPlaidSandbox: (bank: string) => void; onQuickBooksSandbox: (company: string) => void; onPlaid: (d: { txns: Txn[]; balances: Profile["balances"] }) => void; onCsv: (txns: Txn[]) => void; busy: string; error: string; onBack: () => void; onHome: () => void }) {
   const [pick, setPick] = useState<Pick | null>(null);
   // The pop-up window tells us when the app is connected.
   useEffect(() => {
@@ -573,6 +636,8 @@ export function Connect({ onPlaidSandbox, onQuickBooksSandbox, onPlaid, busy, er
               </button>
             ))}
           </div>
+          <div className="flex items-center gap-3 text-xs text-zinc-400"><span className="h-px flex-1 bg-zinc-800" />or<span className="h-px flex-1 bg-zinc-800" /></div>
+          <CsvDrop onUse={onCsv} />
           {!live && <p className="rounded-xl border border-zinc-800 px-3 py-2 text-center text-xs text-zinc-400">Sandbox test login: <b className="text-white">user_good</b> / <b className="text-white">pass_good</b></p>}
           {busy && <p className="text-center text-sm text-zinc-300">Pulling your transactions…</p>}
           {error && <p className="text-sm" style={{ color: "var(--red)" }}>{error}</p>}

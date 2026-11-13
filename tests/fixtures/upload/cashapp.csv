@@ -1,0 +1,3 @@
+Transaction ID,Date,Transaction Type,Currency,Amount,Fee,Net Amount,Asset Type,Asset Price,Asset Amount,Status,Notes,Name of sender/receiver,Account
+T1,2026-04-11 10:00:00 EDT,P2P,USD,180.00,0.00,180.00,,,,COMPLETE,"house wash","Dana R",Your Cash
+T2,2026-04-20 12:00:00 EDT,P2P,USD,-24.23,0.00,-24.23,,,,COMPLETE,"tickets","Noah P",Your Cash
