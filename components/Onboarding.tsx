@@ -99,7 +99,7 @@ export function Landing({ onStart, onDemo, onSignIn, busy }: { onStart: () => vo
 
 /* ---------------- Money-flow backdrop (original, animated) ---------------- */
 
-export function MoneyBackdrop() {
+export function MoneyBackdrop({ showFlow = true }: { showFlow?: boolean }) {
   // Money comes in from the left (bank, Cash App, card, P2P), flows green into the # hub,
   // which sends a red slice to the IRS on the right. The centre column is dimmed so page text
   // stays readable; the flow lives in the margins. The drawing is scaled to fit the screen
@@ -124,7 +124,7 @@ export function MoneyBackdrop() {
       {/* diagonal hatch + green (money in) / red (owed) corner glows */}
       <div className="absolute inset-0 opacity-[0.5]" style={{ backgroundImage: "repeating-linear-gradient(135deg, rgba(255,255,255,.035) 0 1px, transparent 1px 11px)" }} />
       <div className="absolute inset-0" style={{ background: "radial-gradient(60% 55% at 6% 2%, color-mix(in srgb, var(--green) 20%, transparent), transparent 70%), radial-gradient(60% 55% at 100% 104%, color-mix(in srgb, var(--red) 17%, transparent), transparent 70%)" }} />
-      <svg className="absolute inset-0 hidden h-full w-full lg:block" viewBox="0 0 1240 760" preserveAspectRatio="xMidYMid meet">
+      {showFlow && <svg className="absolute inset-0 hidden h-full w-full lg:block" viewBox="0 0 1240 760" preserveAspectRatio="xMidYMid meet">
         <defs>
           {/* dim a vertical column down the middle, where page text sits */}
           <linearGradient id="mb-col" x1="0" y1="0" x2="1" y2="0">
@@ -179,7 +179,7 @@ export function MoneyBackdrop() {
             <text x="33" y="25" textAnchor="middle" fontSize="13" fontWeight="800" fill="var(--red)">IRS</text>
           </g>
         </g>
-      </svg>
+      </svg>}
     </div>
   );
 }
@@ -211,7 +211,8 @@ export function Starfield() {
 function Shell({ children, step, onBack, onHome }: { children: React.ReactNode; step: number; onBack?: () => void; onHome?: () => void }) {
   return (
     <div className="relative min-h-screen bg-black" style={pad}>
-      <MoneyBackdrop />
+      {/* Setup content fills both columns, so keep the texture without tiles behind it. */}
+      <MoneyBackdrop showFlow={false} />
       <div className="pointer-events-none fixed inset-x-0 top-0 h-[60vh]" style={{ background: "radial-gradient(60% 60% at 50% 0%, rgba(255,255,255,.08), transparent 70%)" }} />
       <header className="relative z-10 mx-auto flex max-w-6xl items-center justify-between py-5">
         <button onClick={onHome} aria-label="The Number, home"><Wordmark size={34} /></button>
@@ -600,7 +601,7 @@ export function Connect({ onPlaidSandbox, onQuickBooksSandbox, onPlaid, onCsv, b
           <div className="flex items-center gap-3 text-xs text-zinc-400"><span className="h-px flex-1 bg-zinc-800" />or<span className="h-px flex-1 bg-zinc-800" /></div>
           <div>
             <div className="flex items-center gap-4">
-              <span className="grid h-12 w-12 place-items-center rounded-2xl border border-zinc-700 font-display text-lg font-bold">qb</span>
+              <img src="/quickbooks-logo.svg" alt="" width={48} height={48} className="brand-logo h-12 w-12 shrink-0 p-2" />
               <div><div className="font-semibold">QuickBooks</div><div className="text-sm text-zinc-400">Already use QuickBooks? Connect it in one tap.</div></div>
             </div>
             <div className="mt-4"><PlaidButton onSandbox={onQuickBooksSandbox} label="Connect QuickBooks" primary={false} /></div>

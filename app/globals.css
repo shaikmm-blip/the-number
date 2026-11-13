@@ -26,6 +26,8 @@
 /* Light mode: the design is pure black & white, so a full inversion gives an exact light twin.
    hue-rotate keeps the small status dots green/amber/red. */
 html[data-theme="light"] { filter: invert(1) hue-rotate(180deg); }
+/* Counter the page filter so official brand artwork retains its original colors. */
+html[data-theme="light"] .brand-logo { filter: hue-rotate(-180deg) invert(1); }
 .tile { background: #070707; }
 
 @layer base { *, ::before, ::after { border-color: var(--line); } }
