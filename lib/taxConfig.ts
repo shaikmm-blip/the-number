@@ -8,10 +8,11 @@ export const SOURCES = {
   irs2026: "https://www.irs.gov/newsroom/irs-releases-tax-inflation-adjustments-for-tax-year-2026-including-amendments-from-the-one-big-beautiful-bill",
   ssWageBase: "https://www.journalofaccountancy.com/news/2025/oct/social-security-wage-base-and-cola-announced-for-2026/",
   seTax: "https://www.irs.gov/businesses/small-businesses-self-employed/self-employment-tax-social-security-and-medicare-taxes",
-  youngEntrepreneurs: "https://www.irs.gov/ht/newsroom/when-the-lemonade-stand-makes-bank-young-entrepreneurs-and-taxes",
+  youngEntrepreneurs: "https://www.irs.gov/newsroom/when-the-lemonade-stand-makes-bank-young-entrepreneurs-and-taxes",
   estimatedTaxes: "https://www.irs.gov/businesses/small-businesses-self-employed/estimated-taxes",
   soleProprietor: "https://www.irs.gov/businesses/small-businesses-self-employed/sole-proprietorships",
   qbi: "https://www.irs.gov/newsroom/qualified-business-income-deduction",
+  scheduleSE: "https://www.irs.gov/forms-pubs/about-schedule-se-form-1040",
 };
 
 // Human titles for the links above, as each page titles itself (checked Nov 12, 2026).
@@ -23,6 +24,7 @@ export const SOURCE_TITLES: Record<keyof typeof SOURCES, string> = {
   estimatedTaxes: "IRS: Estimated taxes",
   soleProprietor: "IRS: Sole proprietorships",
   qbi: "IRS: Qualified business income deduction",
+  scheduleSE: "IRS: About Schedule SE (Form 1040), Self-Employment Tax",
 };
 
 export const TAX_2026 = {
