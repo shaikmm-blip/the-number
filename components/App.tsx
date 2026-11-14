@@ -595,7 +595,7 @@ function Profile({ r, txns, account, source, plan, onReconnect, onEditInfo, onCh
         <p className="muted mt-1 text-sm">Where The Number reads your income and business costs.</p>
         <div className="mt-4 flex items-center gap-3 rounded-2xl border border-zinc-800 bg-black/30 p-4">
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white text-black"><Landmark size={18} /></span>
-          <div className="min-w-0 flex-1"><div className="font-medium">{dataKind}</div><div className="muted truncate text-xs">{source}</div></div>
+          <div className="min-w-0 flex-1"><div className="font-medium">Banks &amp; accounts</div><div className="muted truncate text-xs">{source}</div></div>
           {dataKind === "Connected" && <span className="dot shrink-0" style={{ background: "var(--green)" }} />}
         </div>
         <button className="btn btn-primary mt-4 w-full" onClick={onReconnect}><ArrowUpRight size={16} />Switch bank, Venmo or QuickBooks</button>
