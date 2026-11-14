@@ -6,7 +6,7 @@ import { AlertTriangle, ArrowRight, Check, ChevronDown, Loader2, Lightbulb, Lock
 import { classify } from "@/lib/classify";
 import { latestBalance, normalize } from "@/lib/csv";
 import { DEMO_FILES, DEMO_PROFILE } from "@/lib/demo";
-import { computeNumber, type Alert, type Line, type NumberResult } from "@/lib/number";
+import { computeNumber, dueIn, localToday, periodLeft, type Alert, type Line, type NumberResult } from "@/lib/number";
 import { federalEstimate, formatUSD } from "@/lib/tax";
 import { randomFactor, scaleBusiness } from "@/lib/scale";
 import { ASSUMPTIONS, SOURCES, SOURCE_TITLES, TAX_2026, TAX_YEAR } from "@/lib/taxConfig";
@@ -20,7 +20,6 @@ type Tab = "home" | "alerts" | "learn" | "settle" | "profile";
 type Stage = "landing" | "signup" | "pricing" | "connect" | "app";
 type Why = { title: string; body: string; txns?: Txn[] };
 
-const dayNum = (iso: string) => Date.parse(iso + "T00:00:00Z") / 86_400_000;
 const PLAN_NAME: Record<string, string> = { trial: "Free trial", free: "Free trial", season: "Season Pass", family: "Season Pass" };
 export type AlertPrefs = Record<string, boolean>;
 const DEFAULT_PREFS: AlertPrefs = { due: true, late: true, paid: true, weekly: true, locks: true, sms: true, email: false };
@@ -95,12 +94,12 @@ export default function App() {
       if (!r.ok) throw new Error(j.error);
       if (loadSeq.current !== seq) return; // superseded (e.g. a CSV was used meanwhile)
       const last = (j.txns as Txn[]).reduce((m, t) => (t.date > m ? t.date : m), `${TAX_YEAR}-01-01`);
-      setProfile({ ...DEMO_PROFILE, ownerName: "You", businessName: "Your business", age: 0, parentRule: undefined, balances: [], bills: [], asOf: new Date().toISOString().slice(0, 10) > last ? new Date().toISOString().slice(0, 10) : last });
+      setProfile({ ...DEMO_PROFILE, ownerName: "You", businessName: "Your business", age: 0, parentRule: undefined, balances: [], bills: [], asOf: localToday() > last ? localToday() : last });
       setTxns(j.txns); enter("QuickBooks (sandbox company), Profit & Loss");
     }).catch((e) => { if (loadSeq.current === seq) setError((e as Error).message); }).finally(() => { if (loadSeq.current === seq) setBusy(""); });
   }, []);
   useEffect(() => { window.scrollTo(0, 0); }, [stage, tab]);
-  const result = useMemo(() => (txns ? computeNumber(txns, profile) : null), [txns, profile]);
+  const result = useMemo(() => (txns ? computeNumber(txns, profile, localToday()) : null), [txns, profile]);
 
   function enter(note: string) { loadSeq.current++; epoch.current++; setBusy(""); setLoadFail(false); setSource(note); setTab("home"); go("app"); }
 
@@ -122,7 +121,7 @@ export default function App() {
       // Plaid sometimes hands back only the latest month on a brand-new test item. Need the whole year for an honest tax number.
       const first = (j.txns as Txn[]).reduce((m, t) => (t.date < m ? t.date : m), "9999");
       if ((j.txns as Txn[]).length < 120 || first > `${TAX_YEAR}-02-01`) throw new Error(`Plaid returned ${j.txns.length} transactions, not the full year yet`);
-      setProfile({ ...DEMO_PROFILE, asOf: new Date().toISOString().slice(0, 10), balances: j.balances });
+      setProfile({ ...DEMO_PROFILE, asOf: localToday(), balances: j.balances });
       setTxns(scaleBusiness(j.txns, f)); enter(via === "qbo" ? `QuickBooks Sandbox · ${bank} (sample business, pulled through a Plaid Sandbox test bank)` : ["Venmo", "Cash App", "PayPal", "Stripe"].includes(bank) ? `${bank} Sandbox (sample business)` : `Plaid Sandbox · ${bank} (test connection, sample business)`);
     } catch (e) {
       // Plaid unreachable (Wi-Fi, keys): fall back to the same data from local files so the demo never breaks.
@@ -150,16 +149,16 @@ export default function App() {
     if (stageRef.current !== "connect") return;
     // Our Plaid Sandbox test user (Jay's business): pair the bank data with Jay's profile (age, bills he entered).
     if (data.balances.some((b) => b.name.startsWith("Jay's Pressure Washing"))) {
-      setProfile({ ...DEMO_PROFILE, asOf: new Date().toISOString().slice(0, 10), balances: data.balances });
+      setProfile({ ...DEMO_PROFILE, asOf: localToday(), balances: data.balances });
       setTxns(data.txns); enter("Your bank via Plaid (Sandbox test user)"); return;
     }
-    setProfile({ ...DEMO_PROFILE, ownerName: account?.name || "You", businessName: account ? `${account.name}'s ${account.business.toLowerCase()}` : "Your business", age: 0, parentRule: undefined, balances: data.balances, bills: [], asOf: new Date().toISOString().slice(0, 10) });
+    setProfile({ ...DEMO_PROFILE, ownerName: account?.name || "You", businessName: account ? `${account.name}'s ${account.business.toLowerCase()}` : "Your business", age: 0, parentRule: undefined, balances: data.balances, bills: [], asOf: localToday() });
     setTxns(data.txns); enter("Your bank via Plaid");
   }
 
   // "Upload a CSV instead": rows were read and tagged in the browser (lib/upload.ts); count them as this person's own data.
   function onCsv(rows: Txn[]) {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localToday();
     // Only this tax year's rows set the calculation date; rows from other years don't count and mustn't move it.
     const last = rows.filter((t) => t.date.startsWith(String(TAX_YEAR))).reduce((m, t) => (t.date > m ? t.date : m), `${TAX_YEAR}-01-01`);
     setProfile({ ...DEMO_PROFILE, ownerName: account?.name || "You", businessName: account?.business || "Your business", age: 0, parentRule: undefined, balances: [], bills: [], asOf: today > last ? today : last });
@@ -301,7 +300,6 @@ function Home({ r, openLine, setWhy, txns, go, source }: { r: NumberResult; open
   const shown = useCountUp(r.owedSoFarCents);
   const usd = (c: number) => formatUSD(c, { cents: true });
   const fmtDate = (iso: string, year = false) => new Date(iso + "T12:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", ...(year ? { year: "numeric" } : {}) });
-  const days = (iso: string) => Math.round(dayNum(iso) - dayNum(r.asOf));
   const live = r.quarters.find((q) => q.status === "building");
   const owedRows = r.quarters.filter((q) => (q.status === "missed" || q.status === "locked" || q.status === "building") && q.remainingCents > 0);
   const payBy = live?.due ?? r.next.due;
@@ -350,6 +348,7 @@ function Home({ r, openLine, setWhy, txns, go, source }: { r: NumberResult; open
       <section className="card hero-glow overflow-hidden px-6 py-10 text-center sm:py-14">
         <div className="flex items-center justify-center gap-2 text-sm text-zinc-400"><span className="dot" style={{ background: anyLate ? "var(--red)" : "var(--green)" }} />Estimated tax you owe</div>
         <div className="font-display num mt-3 text-[clamp(4rem,13vw,8rem)] font-semibold leading-none tracking-tight">{usd(shown)}</div>
+        {r.asOf < r.today && <p className="mt-2 text-xs text-zinc-400">{/sample/i.test(source) ? "Sample data" : "Data"} through {fmtDate(r.asOf, true)}</p>}
         <p className="mx-auto mt-4 max-w-md text-zinc-400">Federal tax on your {TAX_YEAR} business profit as a sole proprietor, minus anything you've already paid.</p>
         <button className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-zinc-300 underline-offset-4 hover:text-white hover:underline" onClick={() => setWhy({ title: `How we estimated ${formatUSD(r.owedSoFarCents)}`, body: taxLines.map((l) => `${l.label}: ${formatUSD(l.amountCents)}. ${l.why}`).join("\n\n") })}>Why this much? <Info size={14} /></button>
       </section>
@@ -360,13 +359,13 @@ function Home({ r, openLine, setWhy, txns, go, source }: { r: NumberResult; open
         <div className="card flex min-w-0 flex-col p-6">
           <div className="flex items-center justify-between gap-2"><Label icon={Lock}>1 · Pay by {fmtDate(payBy)}</Label><span className="rounded-full border border-zinc-700 px-2.5 py-0.5 text-[11px] text-zinc-300">estimated</span></div>
           <div className="font-display num mt-4 text-5xl font-semibold">{usd(r.owedSoFarCents)}</div>
-          <div className="mt-1 text-sm text-zinc-400">Next due date <b className="text-white">{fmtDate(payBy, true)}</b> · {days(payBy)} days from now</div>
+          <div className="mt-1 text-sm text-zinc-400">Next due date <b className="text-white">{fmtDate(payBy, true)}</b> · {dueIn(payBy, r.today)}</div>
           <p className="muted mt-2 text-sm">Tax on money you've already earned. New income and costs show up in box 2.</p>
           {owedRows.length > 1 && (
             <ul className="mt-3 divide-y text-sm">
               {owedRows.map((q) => (
                 <li key={q.quarter} className="flex items-center justify-between gap-3 py-2">
-                  <span className="text-zinc-300">{q.status === "building" ? `${q.covers.split(" – ")[0]} – today` : q.covers}</span>
+                  <span className="text-zinc-300">{q.status === "building" ? `${q.covers.split(" – ")[0]} – ${r.asOf < r.today ? fmtDate(r.asOf) : "today"}` : q.covers}</span>
                   <span className="flex items-center gap-2"><span className="num font-medium">{usd(q.remainingCents)}</span>{q.status === "missed" && <span className="flex items-center gap-1 rounded-full border border-zinc-700 px-2 py-0.5 text-[11px] text-zinc-300"><span className="dot !h-1.5 !w-1.5" style={{ background: "var(--red)" }} />late</span>}</span>
                 </li>
               ))}
@@ -379,7 +378,7 @@ function Home({ r, openLine, setWhy, txns, go, source }: { r: NumberResult; open
         <div className="card hero-glow flex min-w-0 flex-col p-6">
           <div className="flex items-center justify-between gap-2"><Label icon={CalendarClock}>2 · New income and costs</Label><span className="flex items-center gap-1.5 text-xs text-zinc-400"><span className="dot live-dot" style={{ background: "var(--green)" }} />live</span></div>
           <div className="mt-4 font-display num text-4xl font-semibold transition-colors duration-500" style={{ color: flash === "in" ? "var(--green)" : flash === "out" ? "var(--red)" : undefined }}>{newTaxShown < 0 ? "−" : "+"}{usd(Math.abs(newTaxShown))}</div>
-          <div className="mt-1 text-sm text-zinc-400">Estimated extra tax on new income and costs from now through <b className="text-white">{live ? fmtDate(live.end, true) : fmtDate(payBy, true)}</b>{live && <> &mdash; {days(live.end)} days to go</>}.</div>
+          <div className="mt-1 text-sm text-zinc-400">Estimated extra tax on new income and costs from now through <b className="text-white">{live ? fmtDate(live.end, true) : fmtDate(payBy, true)}</b>{live && <> &mdash; {periodLeft(live.end, r.today)}</>}.</div>
           <p className="muted mt-2 text-sm">Simple rule: set aside about <b className="text-white">${per100}</b> of every <b className="text-white">$100</b> you make.</p>
           <ul className="mt-4 flex-1 space-y-2 text-sm" aria-live="polite">
             {feed.length === 0 && <li className="muted flex items-center gap-2 text-sm"><span className="dot live-dot" style={{ background: "var(--green)" }} />Waiting for new income and costs…</li>}

@@ -4,6 +4,20 @@ import type { Profile, Txn } from "./types";
 
 const dayNum = (iso: string) => Date.parse(iso + "T00:00:00Z") / 86_400_000;
 
+// V5: day counts use the viewer's own calendar date. toISOString() is the UTC date, a day ahead in the evening in the U.S.
+export const localToday = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+export const daysBetween = (fromIso: string, toIso: string) => Math.round(dayNum(toIso) - dayNum(fromIso));
+/** "63 days from now", "due today" or "1 day overdue". Never a negative count. */
+export function dueIn(dueIso: string, today: string) {
+  const d = daysBetween(today, dueIso);
+  return d > 0 ? `${d} day${d === 1 ? "" : "s"} from now` : d === 0 ? "due today" : `${-d} day${d === -1 ? "" : "s"} overdue`;
+}
+/** "48 days to go", "ends today" or "ended". */
+export function periodLeft(endIso: string, today: string) {
+  const d = daysBetween(today, endIso);
+  return d > 0 ? `${d} day${d === 1 ? "" : "s"} to go` : d === 0 ? "ends today" : "ended";
+}
+
 export interface Line { key: string; label: string; amountCents: number; why: string; txnIds?: string[] }
 export interface Alert { id: string; level: "critical" | "warning" | "info"; title: string; body: string }
 
@@ -43,7 +57,10 @@ export function quarterBreakdown(txns: Txn[], asOf: string, paidCents: number): 
 }
 
 export interface NumberResult {
+  /** Last date the data covers. */
   asOf: string;
+  /** The viewer's calendar date; every day count is measured from it (V5). */
+  today: string;
   incomeCents: number;
   expensesCents: number;
   netProfitCents: number;
@@ -66,7 +83,7 @@ export interface NumberResult {
   quarters: Quarter[];
 }
 
-export function computeNumber(txns: Txn[], profile: Profile): NumberResult {
+export function computeNumber(txns: Txn[], profile: Profile, today = profile.asOf): NumberResult {
   const asOf = profile.asOf;
   const inYear = txns.filter((t) => t.date.startsWith(String(TAX_YEAR)) && t.date <= asOf);
   const incomeTx = inYear.filter((t) => t.kind === "business_income" || (t.kind === "review" && t.amountCents > 0));
@@ -92,9 +109,9 @@ export function computeNumber(txns: Txn[], profile: Profile): NumberResult {
   const balance = profile.balances.reduce((s, b) => s + b.balanceCents, 0);
   const safe = balance - theNumber;
 
-  const upcoming = TAX_2026.quarterlyDueDates.find((q) => q.due >= asOf) ?? TAX_2026.quarterlyDueDates[3];
+  const upcoming = TAX_2026.quarterlyDueDates.find((q) => q.due >= today) ?? TAX_2026.quarterlyDueDates[3];
   const missed = paid === 0 ? TAX_2026.quarterlyDueDates.filter((q) => q.due < asOf).map((q) => ({ quarter: q.quarter, due: q.due })) : [];
-  const daysLeft = Math.round(dayNum(upcoming.due) - dayNum(asOf));
+  const daysLeft = daysBetween(today, upcoming.due); // negative once the last due date has passed; shown through dueIn()
   const monthsToDue = Math.max(1, Math.ceil(daysLeft / 30));
   const saveThisMonth = Math.round(owed / monthsToDue);
 
@@ -130,12 +147,12 @@ export function computeNumber(txns: Txn[], profile: Profile): NumberResult {
   const alerts: Alert[] = [];
   if (safe < 0) alerts.push({ id: "below", level: "critical", title: `You're ${formatUSD(-safe)} below your Number`, body: `You have ${formatUSD(balance)} across your accounts, but ${formatUSD(theNumber)} of it is already spoken for. Hold off on big purchases until you're back above it.` });
   if (missedQ.length) alerts.push({ id: "missed", level: "warning", title: `${missedQ.length} estimated tax payment${missedQ.length > 1 ? "s" : ""} missed: ${formatUSD(missedQ.reduce((s, q) => s + q.remainingCents, 0))}`, body: `Estimated ${missedQ.map((q) => `${formatUSD(q.remainingCents)} for the period due ${q.due}`).join(", ")}. Those periods have ended. Paying soon at irs.gov/payments keeps the late penalty small.` });
-  if (building) alerts.push({ id: "next", level: "info", title: `Estimated payment for this period: ${formatUSD(building.remainingCents)}, due ${building.due} (${daysLeft} days)`, body: `This one is still open. It covers ${building.covers}, and it changes as income, costs and payments come in until the period ends.` });
+  if (building) alerts.push({ id: "next", level: "info", title: `Estimated payment for this period: ${formatUSD(building.remainingCents)}, due ${building.due} (${dueIn(building.due, today)})`, body: `This one is still open. It covers ${building.covers}, and it changes as income, costs and payments come in until the period ends.` });
   if (reviewCount) alerts.push({ id: "review", level: "info", title: `${reviewCount} payments need a quick answer`, body: `Tell us business or personal. Payment apps expect business money on a business profile, so sorting these keeps you legit.` });
   if (profile.parentRule && owed > profile.parentRule.amountCents) alerts.push({ id: "rule", level: "warning", title: `${profile.parentRule.label} is wrong`, body: `You're under the limit for income tax, but you still owe an estimated ${formatUSD(owed)}, mostly self-employment tax. It starts at $400 of profit, at any age.` });
 
   return {
-    asOf, incomeCents: income, expensesCents: expenses, netProfitCents: net, reviewCount, fed,
+    asOf, today, incomeCents: income, expensesCents: expenses, netProfitCents: net, reviewCount, fed,
     taxPaidCents: paid, owedSoFarCents: owed, cushionCents: cushion, billsCents: bills, theNumberCents: theNumber,
     balanceCents: balance, safeToSpendCents: safe, saveThisMonthCents: saveThisMonth,
     next: { quarter: upcoming.quarter, due: upcoming.due, daysLeft, amountCents: owed }, missed,

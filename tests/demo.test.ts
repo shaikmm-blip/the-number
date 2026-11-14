@@ -73,3 +73,35 @@ describe("randomized sample business", () => {
     }
   });
 });
+
+import { daysBetween, dueIn, localToday, periodLeft } from "../lib/number";
+import { DEMO_FACTOR } from "../lib/scale";
+describe("V5: day counts use the viewer's real date", () => {
+  const sample = () => computeNumber(scaleBusiness(load(), DEMO_FACTOR), DEMO_PROFILE, "2026-11-13");
+  it("on Nov 13, 2026: 63 days to Jan 15 and 48 to Dec 31; the sample headline is unchanged", () => {
+    const r = sample();
+    expect(r.today).toBe("2026-11-13");
+    expect(r.asOf).toBe("2026-11-06"); // the sample's data date stays pinned
+    expect(r.next.due).toBe("2027-01-15");
+    expect(r.next.daysLeft).toBe(63);
+    expect(dueIn(r.next.due, r.today)).toBe("63 days from now");
+    expect(daysBetween(r.today, "2026-12-31")).toBe(48);
+    expect(periodLeft("2026-12-31", r.today)).toBe("48 days to go");
+    expect(r.owedSoFarCents).toBe(528_102);
+    expect(computeNumber(scaleBusiness(load(), DEMO_FACTOR), DEMO_PROFILE).owedSoFarCents).toBe(528_102);
+  });
+  it("Jan 15, 2027 reads as due today and Jan 16 as overdue, never as negative days", () => {
+    expect(dueIn("2027-01-15", "2027-01-15")).toBe("due today");
+    expect(dueIn("2027-01-15", "2027-01-16")).toBe("1 day overdue");
+    expect(dueIn("2027-01-15", "2027-01-20")).toBe("5 days overdue");
+    expect(dueIn("2027-01-15", "2027-01-14")).toBe("1 day from now");
+    const r = computeNumber(scaleBusiness(load(), DEMO_FACTOR), DEMO_PROFILE, "2027-01-16");
+    expect(r.next.daysLeft).toBe(-1);
+    expect(r.alerts.map((a) => a.title + a.body).join(" ")).not.toMatch(/-\d+ days/);
+    expect(periodLeft("2026-12-31", "2027-01-16")).toBe("ended");
+  });
+  it("uses the local calendar date, not the UTC date", () => {
+    expect(localToday(new Date(2026, 10, 13, 23, 30))).toBe("2026-11-13"); // 11:30 pm local is already Nov 14 in UTC for the Americas
+    expect(localToday(new Date(2026, 0, 1, 0, 5))).toBe("2026-01-01");
+  });
+});
