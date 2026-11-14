@@ -104,6 +104,11 @@ describe("V5: day counts use the viewer's real date", () => {
     expect(next.body).not.toMatch(/still open/); // an overdue period is not described as open
     const onTime = computeNumber(scaleBusiness(load(), DEMO_FACTOR), DEMO_PROFILE, "2026-11-13").alerts.find((a) => a.id === "next")!;
     expect(onTime.body).toMatch(/still open/);
+    // Jan 1-15, 2027: the period ended Dec 31 but its payment isn't due yet
+    const jan1 = computeNumber(scaleBusiness(load(), DEMO_FACTOR), DEMO_PROFILE, "2027-01-01").alerts.find((a) => a.id === "next")!;
+    expect(jan1.body).not.toMatch(/still open/);
+    expect(jan1.body).toMatch(/has ended; its payment is due 2027-01-15/);
+    expect(jan1.title).toContain("14 days from now");
   });
   it("uses the local calendar date, not the UTC date", () => {
     expect(localToday(new Date(2026, 10, 13, 23, 30))).toBe("2026-11-13"); // 11:30 pm local is already Nov 14 in UTC for the Americas
