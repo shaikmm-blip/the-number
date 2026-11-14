@@ -85,14 +85,18 @@ export function Landing({ onStart, onDemo, onSignIn, busy }: { onStart: () => vo
             <a className="underline-offset-2 hover:underline" href="https://american.edu/media/news/20230418_CarolineBrucknerTaxLiteracySurvey.cfm" target="_blank" rel="noreferrer">American University Kogod, Small Business Tax Literacy Survey</a>
           </div>
         </div>
-        <div className="rise mt-7 flex flex-col items-center gap-3">
-          <button className="btn btn-primary btn-halo min-w-[220px] !rounded-xl !py-3.5 text-base" onClick={onStart}>Get Started <ArrowRight size={16} /></button>
-          <span className="text-xs text-zinc-400">Connects with your bank through Plaid, and with QuickBooks</span>
-          <button className="inline-flex items-center gap-2 text-sm text-zinc-400 underline-offset-4 hover:text-white hover:underline" onClick={onDemo} disabled={busy} aria-busy={busy || undefined}>{busy ? <><Loader2 size={14} className="animate-spin motion-reduce:animate-none" aria-hidden />Loading a live example…</> : "or see a live example first"}</button>
+        {/* L2: the horizon hangs from this group, so its line always runs through the gap between the stat card and the button,
+            whatever the screen size. Not animated itself, so the arc stays behind the card (see .horizon). */}
+        <div className="relative mt-7 sm:mt-[52px]">
+          {/* Hidden on phones: there the call to action and its small print land right on the glow and can't be read. */}
+          <div className="horizon pointer-events-none hidden sm:block" aria-hidden />
+          <div className="rise flex flex-col items-center gap-3">
+            <button className="btn btn-primary btn-halo min-w-[220px] !rounded-xl !py-3.5 text-base" onClick={onStart}>Get Started <ArrowRight size={16} /></button>
+            <span className="text-xs text-zinc-400">Connects with your bank through Plaid, and with QuickBooks</span>
+            <button className="inline-flex items-center gap-2 text-sm text-zinc-400 underline-offset-4 hover:text-white hover:underline" onClick={onDemo} disabled={busy} aria-busy={busy || undefined}>{busy ? <><Loader2 size={14} className="animate-spin motion-reduce:animate-none" aria-hidden />Loading a live example…</> : "or see a live example first"}</button>
+          </div>
         </div>
       </main>
-      {/* Hidden on phones: there the call to action and its small print land right on the glow and can't be read. */}
-      <div className="horizon pointer-events-none hidden sm:block" aria-hidden />
     </div>
   );
 }

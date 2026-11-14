@@ -67,7 +67,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .headline-accent { color: var(--green); -webkit-text-fill-color: var(--green); }
 /* L1: a soft green halo around the landing's white Get Started button. */
 .btn-halo { box-shadow: 0 0 0 5px color-mix(in srgb, var(--green) 16%, transparent), 0 0 36px color-mix(in srgb, var(--green) 32%, transparent); }
-.horizon { position: absolute; left: 50%; bottom: -62vw; width: 140vw; height: 80vw; transform: translateX(-50%); border-radius: 50%; background: radial-gradient(closest-side, #000 92%, transparent 100%); box-shadow: 0 -2px 0 rgba(255,255,255,.85), 0 -30px 90px rgba(255,255,255,.35), 0 -80px 220px rgba(255,255,255,.18); }
+/* L2: placed from the landing's call-to-action group, not the viewport: its top sits halfway into the 52px gap above the button
+   (the 2px line is drawn just above that). z-index -1 keeps it behind the stat card inside main's stacking context. */
+.horizon { position: absolute; left: 50%; top: -26px; z-index: -1; width: 140vw; height: 80vw; transform: translateX(-50%); border-radius: 50%; background: radial-gradient(closest-side, #000 92%, transparent 100%); box-shadow: 0 -2px 0 rgba(255,255,255,.85), 0 -30px 90px rgba(255,255,255,.35), 0 -80px 220px rgba(255,255,255,.18); }
 
 @keyframes rise { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
 .toast, .rise { animation: rise .45s ease both; }
