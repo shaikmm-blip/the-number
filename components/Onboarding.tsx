@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, Check, Loader2, Moon, Sun, Landmark, Lock, ShieldCheck, Timer, User } from "lucide-react";
 import type { Kind, Profile, Txn } from "@/lib/types";
 import { MAX_FILE_BYTES, readUploads, type UploadPreview } from "@/lib/upload";
-import { parseTypedAmount, type TypedTotals } from "@/lib/entry";
 import { PLANS, dollars, fullPriceCents, perMonthCents, periodCents } from "@/lib/plans";
 import { TAX_YEAR } from "@/lib/taxConfig";
 import { PlaidButton } from "./PlaidButton";
@@ -289,7 +288,7 @@ export function SignUp({ onDone, onBack, onHome, draft, onDraft }: { onDone: (a:
 
 /* ---------------- Pricing: $10 a month, or 5% off quarterly, 10% off yearly (lib/plans.ts) ---------------- */
 
-const FEATURES = ["An estimate of what you owe the IRS, from your own transactions", "Connect your bank (Plaid) or QuickBooks", "Type in cash jobs and see your tax update", "Due-date and late-payment alerts", "Business-or-personal sorting", "Built for sole proprietors (Schedule C)", "CPA-ready export at tax time"];
+const FEATURES = ["An estimate of what you owe the IRS, from your own transactions", "Connect your bank (Plaid) or QuickBooks", "Upload a CSV from your bank or payment app", "Due-date and late-payment alerts", "Business-or-personal sorting", "Built for sole proprietors (Schedule C)", "CPA-ready export at tax time"];
 
 export function Pricing({ onPick, onBack, onHome, current }: { name?: string; current?: string; onPick: (plan: string) => void; onBack: () => void; onHome: () => void }) {
   return (
@@ -581,46 +580,6 @@ function CsvDrop({ onUse }: { onUse: (txns: Txn[]) => void }) {
   );
 }
 
-/* ---------------- Type it in (V7) ---------------- */
-
-// Totals for the year so far, typed by hand. They have no dates, so the app shows the year's estimate and the next payment, never late periods.
-function TypedIn({ onUse }: { onUse: (t: TypedTotals) => void }) {
-  const [v, setV] = useState({ income: "", costs: "", paid: "" });
-  const [err, setErr] = useState("");
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const income = parseTypedAmount(v.income, "income so far this year");
-    const costs = parseTypedAmount(v.costs, "business costs so far this year");
-    const paid = parseTypedAmount(v.paid, "estimated tax already paid", true);
-    const bad = [income, costs, paid].find((x) => typeof x !== "number") as { error: string } | undefined;
-    if (bad) return setErr(bad.error);
-    setErr(""); onUse({ incomeCents: income as number, costsCents: costs as number, paidCents: paid as number });
-  };
-  const field = (k: keyof typeof v, label: string, hint: string) => (
-    <div>
-      <label className="block text-sm font-medium" htmlFor={`ti-${k}`}>{label}</label>
-      <div className="mt-1.5 flex items-center gap-2 rounded-[14px] border border-zinc-700 bg-white/[0.04] px-3 focus-within:outline focus-within:outline-2 focus-within:outline-white">
-        <span className="text-zinc-400" aria-hidden>$</span>
-        <input id={`ti-${k}`} inputMode="decimal" autoComplete="off" className="w-full bg-transparent py-3 text-base outline-none" value={v[k]} onChange={(e) => { setV({ ...v, [k]: e.target.value }); setErr(""); }} placeholder={hint} aria-describedby={err ? "ti-err" : undefined} />
-      </div>
-    </div>
-  );
-  return (
-    <form onSubmit={submit} noValidate className="rounded-2xl border border-zinc-800 p-4" data-typed-in>
-      <div className="font-medium">Type in your totals instead</div>
-      <p className="mt-1 text-xs text-zinc-400">From January 1 to today. Business costs means what you spent to run the business.</p>
-      <div className="mt-3 grid gap-3 sm:grid-cols-2">
-        {field("income", "Income so far this year", "18,500")}
-        {field("costs", "Business costs so far this year", "3,450")}
-      </div>
-      <div className="mt-3">{field("paid", "Estimated tax already paid (optional)", "0")}</div>
-      {err && <p id="ti-err" className="mt-2 text-sm" style={{ color: "var(--red)" }} role="alert">{err}</p>}
-      <p className="mt-3 text-xs text-zinc-400">Typed totals have no dates, so you&apos;ll see the estimate for the year so far and the next payment. The quarter-by-quarter view needs a CSV or a bank.</p>
-      <button className="btn btn-primary mt-3 w-full !rounded-xl">Use these totals</button>
-    </form>
-  );
-}
-
 /* ---------------- QuickBooks (Intuit OAuth) ---------------- */
 
 // Sends the browser to /api/qbo/connect, which redirects to Intuit's sign-in. It checks first (without following the redirect)
@@ -650,7 +609,7 @@ function QuickBooksButton({ onLeave }: { onLeave: () => void }) {
 
 /* ---------------- Connect ---------------- */
 
-export function Connect({ onPlaidSandbox, onPlaid, onCsv, onTyped, onLeaveForQuickBooks, busy, error, onBack, onHome }: { onLeaveForQuickBooks: () => void; onPlaidSandbox: (bank: string) => void; onPlaid: (d: { txns: Txn[]; balances: Profile["balances"]; source: string }) => void; onCsv: (txns: Txn[]) => void; onTyped: (t: TypedTotals) => void; busy: string; error: string; onBack: () => void; onHome: () => void }) {
+export function Connect({ onPlaidSandbox, onPlaid, onCsv, onLeaveForQuickBooks, busy, error, onBack, onHome }: { onLeaveForQuickBooks: () => void; onPlaidSandbox: (bank: string) => void; onPlaid: (d: { txns: Txn[]; balances: Profile["balances"]; source: string }) => void; onCsv: (txns: Txn[]) => void; busy: string; error: string; onBack: () => void; onHome: () => void }) {
   const [pick, setPick] = useState<Pick | null>(null);
   // The pop-up window tells us when the app is connected.
   useEffect(() => {
@@ -714,9 +673,6 @@ export function Connect({ onPlaidSandbox, onPlaid, onCsv, onTyped, onLeaveForQui
           </div>
           <div className="flex items-center gap-3 text-xs text-zinc-400"><span className="h-px flex-1 bg-zinc-800" />or<span className="h-px flex-1 bg-zinc-800" /></div>
           <CsvDrop onUse={onCsv} />
-          <div className="flex items-center gap-3 text-xs text-zinc-400"><span className="h-px flex-1 bg-zinc-800" />or<span className="h-px flex-1 bg-zinc-800" /></div>
-          <TypedIn onUse={onTyped} />
-          {!live && <p className="rounded-xl border border-zinc-800 px-3 py-2 text-center text-xs text-zinc-400">Sandbox test login: <b className="text-white">user_good</b> / <b className="text-white">pass_good</b></p>}
           {busy && <p className="text-center text-sm text-zinc-300">Pulling your transactions…</p>}
           {error && <p className="text-sm" style={{ color: "var(--red)" }}>{error}</p>}
         </div>

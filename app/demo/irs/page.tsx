@@ -54,17 +54,6 @@ export default function DirectPayReplica() {
           </div>
         ) : (
           <div style={{ background: "#fff", border: "1px solid #d6d7d9", borderRadius: 4, padding: 24, display: "grid", gap: 20, maxWidth: 560 }}>
-            <Field label="Reason for Payment" htmlFor="tn-reason">
-              <select id="tn-reason" defaultValue="" style={input}>
-                <option value="" disabled>- Select -</option>
-                <option>Balance Due</option>
-                <option>Estimated Tax</option>
-                <option>Extension</option>
-                <option>Tax Return or Notice</option>
-                <option>Amended Return</option>
-              </select>
-            </Field>
-
             <Field label="Apply Payment To" htmlFor="tn-apply">
               <select id="tn-apply" defaultValue="" style={input}>
                 <option value="" disabled>- Select -</option>
@@ -74,6 +63,17 @@ export default function DirectPayReplica() {
                 <option>Form 5329 - Retirement Plans/Tax Favored Accounts</option>
                 <option>Civil Penalty</option>
                 <option>Other</option>
+              </select>
+            </Field>
+
+            <Field label="Reason for Payment" htmlFor="tn-reason">
+              <select id="tn-reason" defaultValue="" style={input}>
+                <option value="" disabled>- Select -</option>
+                <option>Balance Due</option>
+                <option>Estimated Tax</option>
+                <option>Extension</option>
+                <option>Tax Return or Notice</option>
+                <option>Amended Return</option>
               </select>
             </Field>
 

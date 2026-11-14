@@ -14,7 +14,8 @@ import { buildEstimatePdf, isQuickBooksMonthlyEntry } from "@/lib/pdf";
 import { CURRENT_RATE_PCT, PENALTY_SOURCES } from "@/lib/penalty";
 import type { Profile, Txn } from "@/lib/types";
 import { planById, planLabel } from "@/lib/plans";
-import { TYPED_SOURCE, typedTotalsTxns, type TypedTotals } from "@/lib/entry";
+import { payAssistSteps } from "@/lib/paySteps";
+import { TYPED_SOURCE } from "@/lib/entry";
 import { Connect, Landing, Logo, Pricing, SignUp, ThemeToggle, type Account } from "./Onboarding";
 
 type Tab = "home" | "alerts" | "learn" | "settle" | "profile";
@@ -186,13 +187,6 @@ export default function App() {
     setTxns(rows); enter("Your CSV upload");
   }
 
-  // V7: totals typed in by hand go through the same path, as undated year-to-date rows. Nothing is placed in a period or called late.
-  function onTyped(t: TypedTotals) {
-    const today = localToday(), lastDay = `${TAX_YEAR}-12-31`;
-    setProfile({ ...DEMO_PROFILE, ownerName: account?.name || "You", businessName: account?.business || "Your business", age: 0, parentRule: undefined, priorYearTax: undefined, typedTotals: true, balances: [], bills: [], asOf: today < lastDay ? today : lastDay });
-    setTxns(typedTotalsTxns(t, today < lastDay ? today : lastDay)); enter(TYPED_SOURCE);
-  }
-
   function setKind(id: string, kind: "business_income" | "personal" | "business_expense") {
     setTxns((ts) => ts!.map((t) => t.id === id ? { ...t, kind, userSet: true, category: kind === "personal" ? "Personal" : kind === "business_income" ? "Customer payment" : "Business expense", reason: "You told us." } : t));
   }
@@ -209,7 +203,7 @@ export default function App() {
   if (stage === "signup") return <SignUp draft={draft} onDraft={setDraft} onBack={back} onHome={home} onDone={(a) => { setAccount({ ...a, plan: account?.plan }); go("pricing"); }} />;
   // Changing plan from inside the app goes straight back to the number; during setup the next step is still Connect.
   if (stage === "pricing") return <Pricing name={account?.name || "friend"} current={account?.plan} onBack={back} onHome={home} onPick={(plan) => { const toApp = planFromApp.current && !!txns; setAccount({ ...(account || { name: "", email: "", business: "" }), plan }); go(toApp ? "app" : "connect"); }} />;
-  if (stage === "connect" || !txns || !result) return <><div {...hush}><Connect onBack={back} onHome={home} onPlaidSandbox={(bank) => loadSampleBank(bank)} onPlaid={plaidFor(epoch.current)} onCsv={onCsv} onTyped={onTyped} onLeaveForQuickBooks={() => { try { sessionStorage.setItem(QBO_RETURN_KEY, JSON.stringify({ account, draft })); } catch { /* fine */ } }} busy={busy} error={error} /></div>{veil}</>;
+  if (stage === "connect" || !txns || !result) return <><div {...hush}><Connect onBack={back} onHome={home} onPlaidSandbox={(bank) => loadSampleBank(bank)} onPlaid={plaidFor(epoch.current)} onCsv={onCsv} onLeaveForQuickBooks={() => { try { sessionStorage.setItem(QBO_RETURN_KEY, JSON.stringify({ account, draft })); } catch { /* fine */ } }} busy={busy} error={error} /></div>{veil}</>;
 
   const byId = new Map(txns.map((t) => [t.id, t]));
   const openLine = (l: Line) => setWhy({ title: l.label, body: l.why, txns: l.txnIds?.map((i) => byId.get(i)!).filter(Boolean).slice(-6) });
@@ -489,13 +483,8 @@ function Settle({ r }: { r: NumberResult }) {
 
 function PayAssist({ r, amountFmt, year, onClose }: { r: NumberResult; amountFmt: string; year: number; onClose: () => void }) {
   const amountRaw = (r.owedSoFarCents / 100).toFixed(2);
-  const fields = [
-    // Order as the IRS describes it: reason first, then "Apply payment to" (Direct Pay help; types-of-payments table, checked Nov 12, 2026).
-    { label: "Reason for Payment", verb: "Pick the reason in the 1st dropdown", show: "Estimated tax", copy: "Estimated Tax" },
-    { label: "Apply Payment To", verb: "Then pick the form", show: "1040-ES", copy: "1040-ES" },
-    { label: "Tax Period for Payment", verb: "Pick the year", show: String(year), copy: String(year) },
-    { label: "Amount", verb: r.paycheckRange ? "Type or paste this amount — our estimate without your paycheck wages, so it can be too low" : "Type or paste this amount — it's our estimate", show: amountFmt, copy: amountRaw },
-  ];
+  // Apply Payment To → Reason for Payment → Tax Period, as the IRS form lists them (lib/paySteps.ts).
+  const fields = payAssistSteps({ year, amountFmt, amountRaw, paycheckNote: !!r.paycheckRange });
   const TOTAL = fields.length + 1;
   const [i, setI] = useState(0);
   const [copied, setCopied] = useState(false);
@@ -544,7 +533,7 @@ function PayAssist({ r, amountFmt, year, onClose }: { r: NumberResult; amountFmt
           <a className="muted inline-flex items-center gap-1 hover:text-white" href={PAY_URL} target="_blank" rel="noreferrer">IRS page <ArrowUpRight size={12} /></a>
           <details className="text-right">
             <summary className="muted cursor-pointer list-none hover:text-white">Why these?</summary>
-            <p className="muted mt-2 max-w-[15rem] text-left text-[11px] leading-relaxed">You&apos;re making a quarterly estimated payment, so it&apos;s Estimated tax &rarr; 1040-ES &rarr; {TAX_YEAR}. The amount is your estimated number &mdash; income minus expenses, run through SE tax, the deduction and your bracket.</p>
+            <p className="muted mt-2 max-w-[15rem] text-left text-[11px] leading-relaxed">You&apos;re making a quarterly estimated payment, so it&apos;s 1040-ES &rarr; Estimated tax &rarr; {TAX_YEAR}. The amount is your estimated number &mdash; income minus expenses, run through SE tax, the deduction and your bracket.</p>
           </details>
         </div>
       </div>

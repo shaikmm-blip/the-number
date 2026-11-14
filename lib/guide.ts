@@ -27,8 +27,8 @@ export function formGuide(r: NumberResult): GuideSection[] {
       intro: `Form 1040-ES is how you figure and pay estimated tax during ${TAX_YEAR}. Paying online with IRS Direct Pay, these are the choices the IRS lists for an estimated tax payment.`,
       rows: [
         { id: "pay", label: "Your estimated tax payment", cents: r.owedSoFarCents, where: "The amount you choose to pay with Form 1040-ES. This is our estimate; you decide what to pay.", source: "form1040ES" },
-        { id: "reason", label: "Reason for payment", value: "Estimated tax", where: "Direct Pay, first choice on the tax information step", source: "directPayTypes" },
-        { id: "apply", label: "Apply payment to", value: "1040-ES", where: "Direct Pay, after the reason", source: "directPayTypes" },
+        { id: "apply", label: "Apply payment to", value: "1040-ES", where: "Direct Pay, first choice on the tax information step", source: "directPayTypes" },
+        { id: "reason", label: "Reason for payment", value: "Estimated tax", where: "Direct Pay, after Apply payment to", source: "directPayTypes" },
         { id: "period", label: "Tax period", value: String(TAX_YEAR), where: "Direct Pay, the tax year the payment is for", source: "directPayTypes" },
         { id: "due", label: r.priorYear === "no" ? "Next due date (optional for you this year)" : "Next due date", value: r.next.due, where: `Form 1040-ES (${TAX_YEAR}), payment due dates`, source: "form1040ES" },
         { id: "id-check", label: "Before you start", value: "A past year's return", where: "Direct Pay checks who you are with a prior-year return. If you have never filed, it can't be used; irs.gov/payments lists other ways to pay.", source: "directPayHelp" },
