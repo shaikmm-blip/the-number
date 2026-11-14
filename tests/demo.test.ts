@@ -75,6 +75,7 @@ describe("randomized sample business", () => {
 });
 
 import { daysBetween, dueIn, localToday, periodLeft } from "../lib/number";
+import { latePenalty } from "../lib/penalty";
 import { DEMO_FACTOR } from "../lib/scale";
 describe("V5: day counts use the viewer's real date", () => {
   const sample = () => computeNumber(scaleBusiness(load(), DEMO_FACTOR), DEMO_PROFILE, "2026-11-13");
@@ -158,10 +159,41 @@ describe("V1: did last year's return show any total tax?", () => {
     expect(prior.body).toMatch(/due with your 2026 return/);
     expect(prior.body).toMatch(/optional/);
   });
+  it("hand-checked: on Jan 16, 2027 the sample's open period (due Jan 15) starts adding penalty too: +$0.39", () => {
+    // Q4 $2,014.11, 1 day late at 7% (2027 rate carried forward): 2,014.11 x 1/365 x 0.07 = 0.3863 -> 0.39
+    const r = computeNumber(txns(), DEMO_PROFILE, "2027-01-16");
+    const q = r.quarters;
+    const earlier = q.slice(0, 3).reduce((s, x) => s + latePenalty(x.amountCents, x.due, "2027-01-16"), 0);
+    expect(q[3].amountCents).toBe(201_411);
+    expect(r.penalty.soFarCents - earlier).toBe(39);
+    expect(r.penalty.assumedRate).toBe(true);
+  });
   it("not answered: today's behavior (penalty shown), flagged as unknown", () => {
     const r = computeNumber(txns(), { ...DEMO_PROFILE, priorYearTax: undefined }, "2026-11-13");
     expect(r.priorYear).toBe("unknown");
     expect(r.penalty.soFarCents).toBe(5_996);
     expect(r.alerts.some((a) => a.id === "prior")).toBe(false);
+  });
+});
+
+import { formGuide } from "../lib/guide";
+describe("V1/V4 follow-up: the exemption reaches every surface; the penalty copy promises nothing", () => {
+  const txns = () => scaleBusiness(load(), DEMO_FACTOR);
+  it("exempt: the open-period alert is an optional early payment, and the guide marks the due date optional", () => {
+    const r = computeNumber(txns(), { ...DEMO_PROFILE, priorYearTax: "no" }, "2026-11-13");
+    const next = r.alerts.find((a) => a.id === "next")!;
+    expect(next.title).toMatch(/^Optional early payment/);
+    expect(next.body).toMatch(/aren't required/);
+    expect(next.title + next.body).not.toMatch(/due 2027-01-15/);
+    const due = formGuide(r).flatMap((s) => s.rows).find((x) => x.id === "due")!;
+    expect(due.label).toMatch(/optional for you this year/);
+  });
+  it("the missed-payment alert describes an estimate on these amounts, not a promise", () => {
+    const r = computeNumber(txns(), DEMO_PROFILE, "2026-11-13");
+    const body = r.alerts.find((a) => a.id === "missed")!.body;
+    expect(body).toMatch(/On these amounts/);
+    expect(body).toMatch(/required payment, which can differ/);
+    expect(body).not.toMatch(/avoids it|stops it growing|The IRS adds/);
+    expect(body).not.toMatch(/assumed/); // Nov 13: no 2027 days counted
   });
 });

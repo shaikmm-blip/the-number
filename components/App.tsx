@@ -134,7 +134,7 @@ export default function App() {
       // Plaid sometimes hands back only the latest month on a brand-new test item. Need the whole year for an honest tax number.
       const first = (j.txns as Txn[]).reduce((m, t) => (t.date < m ? t.date : m), "9999");
       if ((j.txns as Txn[]).length < 120 || first > `${TAX_YEAR}-02-01`) throw new Error(`Plaid returned ${j.txns.length} transactions, not the full year yet`);
-      setProfile({ ...DEMO_PROFILE, asOf: localToday(), balances: j.balances });
+      setProfile({ ...DEMO_PROFILE, asOf: localToday(), balances: j.balances }); setPriorYear(undefined);
       setTxns(scaleBusiness(j.txns, f)); enter(via === "qbo" ? `QuickBooks Sandbox · ${bank} (sample business, pulled through a Plaid Sandbox test bank)` : ["Venmo", "Cash App", "PayPal", "Stripe"].includes(bank) ? `${bank} Sandbox (sample business)` : `Plaid Sandbox · ${bank} (test connection, sample business)`);
     } catch (e) {
       // Plaid unreachable (Wi-Fi, keys): fall back to the same data from local files so the demo never breaks.
@@ -152,7 +152,7 @@ export default function App() {
   async function loadFiles(note?: string, f = randomFactor(), current: () => boolean = () => true) {
     const sample = await sampleTxns();
     if (!current()) return;
-    setProfile(DEMO_PROFILE);
+    setProfile(DEMO_PROFILE); setPriorYear(undefined); // V1: the sample business answers for itself
     setTxns(scaleBusiness(sample, f));
     enter(note || "Sample statements (Chase + Cash App + Venmo)");
   }
@@ -162,7 +162,7 @@ export default function App() {
     if (stageRef.current !== "connect") return;
     // Our Plaid Sandbox test user (Jay's business): pair the bank data with Jay's profile (age, bills he entered).
     if (data.balances.some((b) => b.name.startsWith("Jay's Pressure Washing"))) {
-      setProfile({ ...DEMO_PROFILE, asOf: localToday(), balances: data.balances });
+      setProfile({ ...DEMO_PROFILE, asOf: localToday(), balances: data.balances }); setPriorYear(undefined);
       setTxns(data.txns); enter("Your bank via Plaid (Sandbox test user)"); return;
     }
     setProfile({ ...DEMO_PROFILE, ownerName: account?.name || "You", businessName: account ? `${account.name}'s ${account.business.toLowerCase()}` : "Your business", age: 0, parentRule: undefined, priorYearTax: undefined, balances: data.balances, bills: [], asOf: localToday() });
@@ -239,7 +239,7 @@ export default function App() {
         {tab === "alerts" && <Alerts r={result} go={setTab} prefs={prefs} setPref={setPref} />}
         {tab === "settle" && <Settle r={result} />}
         {tab === "learn" && <Learn r={result} />}
-        {tab === "profile" && <Profile r={result} txns={txns} account={account} source={source} plan={PLAN_NAME[account?.plan || "free"]} onReconnect={() => go("connect")} onEditInfo={() => go("signup")} onChangePlan={() => go("pricing")} onSignOut={signOut} onPriorYear={setPriorYear} />}
+        {tab === "profile" && <Profile r={result} txns={txns} account={account} source={source} plan={PLAN_NAME[account?.plan || "free"]} onReconnect={() => go("connect")} onEditInfo={() => go("signup")} onChangePlan={() => go("pricing")} onSignOut={signOut} onPriorYear={(v) => { setPriorYear(v); setDraft((d) => ({ ...d, prior: v === "unknown" ? "" : v })); }} />}
         <p className="muted pb-4 pt-2 text-center text-xs">Data: {source}. Educational estimate, not tax advice.</p>
       </main>
 
@@ -381,7 +381,7 @@ function Home({ r, openLine, setWhy, txns, go, source }: { r: NumberResult; open
         <div className="card flex min-w-0 flex-col p-6">
           <div className="flex items-center justify-between gap-2"><Label icon={Lock}>{exempt ? `1 · Due with your ${TAX_YEAR} return` : `1 · Pay by ${fmtDate(payBy)}`}</Label><span className="rounded-full border border-zinc-700 px-2.5 py-0.5 text-[11px] text-zinc-300">estimated</span></div>
           <div className="font-display num mt-4 text-5xl font-semibold">{usd(r.owedSoFarCents)}</div>
-          <div className="mt-1 text-sm text-zinc-400">{exempt ? "Optional early payment by" : "Next due date"} <b className="text-white">{fmtDate(payBy, true)}</b> · {dueIn(payBy, r.today)}</div>
+          <div className="mt-1 text-sm text-zinc-400">{exempt ? "Optional early payment by" : "Next due date"} <b className="text-white">{fmtDate(payBy, true)}</b>{exempt && payBy <= r.today ? null : <> · {dueIn(payBy, r.today)}</>}</div>
           <p className="muted mt-2 text-sm">Tax on money you've already earned. New income and costs show up in box 2.</p>
           {profileTyped && <p className="mb-4 mt-2 text-xs text-zinc-400">Your typed totals have no dates, so there&apos;s no quarter-by-quarter view or late check here. That needs a CSV upload or a bank connection.</p>}
           {owedRows.length > 1 && (
@@ -394,7 +394,8 @@ function Home({ r, openLine, setWhy, txns, go, source }: { r: NumberResult; open
               ))}
             </ul>
           )}
-          {anyLate && r.penalty.lateCount > 0 && <p className="muted mb-4 mt-3 text-xs" data-penalty={r.penalty.soFarCents}>Estimated late-payment penalty so far: <b className="text-zinc-300">{usd(r.penalty.soFarCents)}</b>. Each week adds about {usd(r.penalty.perWeekCents)} until the late parts are paid. Uses the Form 2210 method on these estimated amounts: late amount &times; days late &times; the IRS underpayment rate ({CURRENT_RATE_PCT}% a year now; 6% in Apr&ndash;Jun 2026). <PenaltySources />{r.priorYear === "unknown" && <> No penalty applies if last year&apos;s return showed $0 total tax (a refund isn&apos;t $0 tax); you can answer in Profile.</>}</p>}
+          {!exempt && !profileTyped && r.penalty.soFarCents > 0 && <p className="muted mb-4 mt-3 text-xs" data-penalty={r.penalty.soFarCents}>Estimated late-payment penalty so far: <b className="text-zinc-300">{usd(r.penalty.soFarCents)}</b>{r.penalty.perWeekCents > 0 && <>, about {usd(r.penalty.perWeekCents)} more each week until the late parts are paid</>}. An illustration on the amounts shown, using the Form 2210 method: each late amount &times; days late &divide; 365 &times; the IRS underpayment rate ({CURRENT_RATE_PCT}% a year now; 6% in Apr&ndash;Jun 2026{r.penalty.assumedRate && "; 7% assumed for 2027, not yet published"}). The IRS figures the actual penalty from each period&apos;s required payment, which can differ. <PenaltySources /></p>}
+          {r.priorYear === "unknown" && !profileTyped && <p className="mb-4 mt-2 text-xs text-zinc-400">No estimated-tax penalty applies if last year&apos;s total tax was $0 or you didn&apos;t have to file, the year was a full 12 months, and you were a U.S. citizen or resident all year. You can answer in Profile. (<a className="underline underline-offset-2 hover:text-white" href={PENALTY_SOURCES.exception.url} target="_blank" rel="noreferrer">{PENALTY_SOURCES.exception.title}</a>)</p>}
           {exempt && <p className="muted mb-4 mt-3 text-xs" data-penalty="0">Estimated late-payment penalty: <b className="text-zinc-300">$0.00</b>. You said last year&apos;s total tax was $0, so estimated payments aren&apos;t required this year: this estimate is due with your {TAX_YEAR} return, and paying early is optional. (<a className="underline underline-offset-2 hover:text-white" href={PENALTY_SOURCES.exception.url} target="_blank" rel="noreferrer">{PENALTY_SOURCES.exception.title}</a>)</p>}
           <button className="btn btn-primary w-full" style={{ marginTop: "auto" }} onClick={() => go("settle")}>Settle this now <ArrowRight size={15} /></button>
         </div>
@@ -558,7 +559,7 @@ function Profile({ r, txns, account, source, plan, onReconnect, onEditInfo, onCh
       const { jsPDF } = await import("jspdf");
       const due = r.quarters?.find((q) => q.status === "building")?.due ?? r.next.due;
       const nextDue = new Date(due + "T12:00:00Z").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
-      buildEstimatePdf(new jsPDF({ unit: "pt", format: "letter" }), r, { name: account?.name, business: account?.business, source, generated: new Date(), nextDue }, txns).save("the-number-itemized-estimate.pdf");
+      buildEstimatePdf(new jsPDF({ unit: "pt", format: "letter" }), r, { name: account?.name, business: account?.business, source, generated: new Date(), nextDue: r.priorYear === "no" ? undefined : nextDue }, txns).save("the-number-itemized-estimate.pdf");
     } catch {
       setExportError("The PDF could not be created. Please try exporting again.");
     } finally { setExporting(false); }
@@ -585,7 +586,7 @@ function Profile({ r, txns, account, source, plan, onReconnect, onEditInfo, onCh
         <label className="mt-4 block text-sm font-medium" htmlFor="pf-prior">Did last year&apos;s tax return show any total tax?</label>
         <select id="pf-prior" className="input mt-1.5" value={r.priorYear === "unknown" ? "" : r.priorYear} onChange={(e) => onPriorYear((e.target.value || "unknown") as "yes" | "no" | "unknown")}>
           <option value="yes">Yes, some tax</option>
-          <option value="no">No: $0 total tax or no return needed (full year, U.S. citizen or resident)</option>
+          <option value="no">No: $0 total tax or no return needed (full 12-month year, U.S. citizen or resident all year)</option>
           <option value="">Not sure</option>
         </select>
         <p className="mt-1 text-xs text-zinc-400">Check the &ldquo;total tax&rdquo; line on last year&apos;s Form 1040. A refund isn&apos;t $0 total tax.</p>
@@ -746,6 +747,8 @@ function Alerts({ r, go, prefs, setPref }: { r: NumberResult; go: (t: Tab) => vo
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline justify-between gap-2"><div className="font-semibold">{a.title}</div><div className="muted shrink-0 text-xs">now</div></div>
                   <div className="muted mt-0.5 text-sm">{a.body}</div>
+                  {a.id === "missed" && <p className="muted mt-1 text-xs"><PenaltySources /></p>}
+                  {a.id === "prior" && <p className="muted mt-1 text-xs">(<a className="underline underline-offset-2 hover:text-white" href={PENALTY_SOURCES.exception.url} target="_blank" rel="noreferrer">{PENALTY_SOURCES.exception.title}</a>)</p>}
                   {act && <button className="mt-2 flex items-center gap-1.5 text-sm font-medium hover:underline" onClick={() => go(act[1])}>{act[0]} <ArrowRight size={14} /></button>}
                 </div>
               </div>
@@ -837,7 +840,7 @@ function Learn({ r }: { r: NumberResult }) {
     ["02", "Am I a sole proprietor?", <>If you run a business by yourself and never formed an LLC or corporation, yes, automatically. You and the business are the same for taxes: profit goes on <b>Schedule C</b> of your own return, and nobody takes tax out for you (<a className="underline" href={SOURCES.soleProprietor} target="_blank" rel="noreferrer">IRS</a>).</>],
     ["03", "Self-employment tax (the one nobody tells you about)", <>When you have a job, your boss pays half your Social Security and Medicare. When you work for yourself, you pay both halves: <b>15.3% on 92.35% of your profit</b>. It starts at <b>$400 of profit, at any age</b> (<a className="underline" href={SOURCES.youngEntrepreneurs} target="_blank" rel="noreferrer">IRS</a>). For you, that's an estimated <b>{formatUSD(r.fed.se.totalCents)}</b>.</>],
     ["04", "Why do I owe tax if I'm under the limit?", <>The {formatUSD(TAX_2026.standardDeductionCents)} standard deduction only shields you from <i>income</i> tax. That's why your estimated income tax is {formatUSD(r.fed.incomeTaxCents)}. It doesn't cover self-employment tax at all.</>],
-    ["05", "Paying the IRS during the year", <>Nobody withholds tax from your Cash App, so the IRS expects <b>estimated payments</b> four times a year. Pay at <a className="underline" href="https://www.irs.gov/payments" target="_blank" rel="noreferrer">irs.gov/payments</a>. Paying late adds a penalty for each day a payment is late, at the IRS underpayment rate ({CURRENT_RATE_PCT}% a year now){r.penalty.lateCount > 0 ? <>: for you, an estimated <b>{formatUSD(r.penalty.soFarCents, { cents: true })}</b> so far</> : null}. Paying each amount by its due date avoids it. <PenaltySources /></>],
+    ["05", "Paying the IRS during the year", <>Nobody withholds tax from your Cash App, so the IRS expects <b>estimated payments</b> four times a year. Pay at <a className="underline" href="https://www.irs.gov/payments" target="_blank" rel="noreferrer">irs.gov/payments</a>. Paying a required payment late can add a penalty for each day it&apos;s late, at the IRS underpayment rate ({CURRENT_RATE_PCT}% a year now).{r.priorYear !== "no" && r.penalty.soFarCents > 0 ? <> On the amounts here, that&apos;s an estimated <b>{formatUSD(r.penalty.soFarCents, { cents: true })}</b> so far and about {formatUSD(r.penalty.perWeekCents, { cents: true })} more each week; the IRS figures the actual penalty from each period&apos;s required payment.</> : null}{r.priorYear === "no" ? <> You said last year&apos;s total tax was $0, so estimated payments aren&apos;t required for you this year.</> : null} <PenaltySources /></>],
     ["06", "The 20% small-business deduction", <>Sole proprietors can knock up to 20% off their business profit for income tax (the QBI deduction). We include it, so your number isn't inflated (<a className="underline" href={SOURCES.qbi} target="_blank" rel="noreferrer">IRS</a>).</>],
     ["07", "Business vs. personal on payment apps", <>Mixing them makes your profit look bigger (more tax) or smaller (trouble later). Tag every payment, or better, use a separate business profile.</>],
   ];

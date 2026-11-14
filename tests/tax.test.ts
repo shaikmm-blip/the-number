@@ -77,9 +77,41 @@ describe("estimated-tax penalty (Form 2210 method: amount x days late / 365 x ra
   it("hand-checked: one more week in Q4 on $1,000 adds $1.34", () => {
     // 1,000 x 7/365 x 0.07 = 1.3425 -> 1.34
     const q = [{ quarter: "Q3", due: "2026-09-15", covers: "", start: "2026-06-01", end: "2026-08-31", amountCents: 100_000, remainingCents: 100_000, status: "missed" as const }];
-    const s = penaltySummary(q, "2026-11-13");
+    const s = penaltySummary(q, [], "2026-11-13");
     expect(s.soFarCents).toBe(latePenalty(100_000, "2026-09-15", "2026-11-13"));
     expect(s.perWeekCents).toBe(134);
     expect(s.lateCount).toBe(1);
+    expect(s.assumedRate).toBeUndefined();
+  });
+});
+
+import { penaltyOn } from "../lib/penalty";
+describe("estimated-tax penalty with dated payments (applied to the earliest unpaid period, on the day paid)", () => {
+  it("hand-checked: a late payment keeps the penalty that built up before it ($1,000 due Jun 15, paid Nov 13 -> $28.55)", () => {
+    const r = penaltyOn([{ due: "2026-06-15", amountCents: 100_000 }], [{ date: "2026-11-13", cents: 100_000 }], "2026-12-01");
+    expect(r.cents).toBe(2_855); // same as unpaid through Nov 13; nothing after the payment
+    expect(r.lateCount).toBe(0);
+  });
+  it("hand-checked: a partial payment lowers the balance from its date on -> $22.87", () => {
+    // $1,000 Jun 16-30 at 6%: 2.4658 -> 2.47; Jul 1-Aug 31 (62 days) at 7%: 11.8904 -> 11.89
+    // $600 Sep 1-30 at 7%: 3.4521 -> 3.45; Oct 1-Nov 13 (44 days) at 7%: 5.0630 -> 5.06.  Total 22.87
+    const r = penaltyOn([{ due: "2026-06-15", amountCents: 100_000 }], [{ date: "2026-08-31", cents: 40_000 }], "2026-11-13");
+    expect(r.cents).toBe(2_287);
+    expect(r.lateCount).toBe(1);
+  });
+  it("a payment made before the due date means no penalty", () => {
+    expect(penaltyOn([{ due: "2026-06-15", amountCents: 100_000 }], [{ date: "2026-06-01", cents: 100_000 }], "2026-11-13").cents).toBe(0);
+  });
+  it("hand-checked: one payment goes to the earliest period first -> $3.99", () => {
+    // $500 due Apr 15 paid May 1: Apr 16-May 1 = 16 days at 6% = 1.3151 -> 1.32
+    // $500 due Jun 15 unpaid through Jul 15: Jun 16-30 at 6% = 1.2329 -> 1.23; Jul 1-15 at 7% = 1.4384 -> 1.44.  Total 3.99
+    const r = penaltyOn([{ due: "2026-04-15", amountCents: 50_000 }, { due: "2026-06-15", amountCents: 50_000 }], [{ date: "2026-05-01", cents: 50_000 }], "2026-07-15");
+    expect(r.cents).toBe(399);
+    expect(r.lateCount).toBe(1);
+  });
+  it("flags when the figure uses the carried-forward 2027 rate (not yet published)", () => {
+    const q = [{ quarter: "Q3", due: "2026-09-15", covers: "", start: "2026-06-01", end: "2026-08-31", amountCents: 100_000, remainingCents: 100_000, status: "missed" as const }];
+    expect(penaltySummary(q, [], "2026-12-28").assumedRate).toBe(true); // next week crosses into 2027
+    expect(penaltySummary(q, [], "2026-12-20").assumedRate).toBeUndefined();
   });
 });

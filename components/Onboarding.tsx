@@ -283,7 +283,7 @@ export function SignUp({ onDone, onBack, onHome, draft, onDraft }: { onDone: (a:
             <legend className="text-sm font-medium">Did last year&apos;s tax return show any total tax?</legend>
             <p className="mt-1 text-xs text-zinc-400">Check the &ldquo;total tax&rdquo; line on your Form 1040. Getting a refund isn&apos;t the same as $0 total tax.</p>
             <div className="mt-2 grid gap-2">
-              {([["yes", "Yes, some tax"], ["no", "No: $0 total tax or I didn't have to file, for a full year as a U.S. citizen or resident"], ["", "Not sure (skip for now)"]] as const).map(([v, l]) => (
+              {([["yes", "Yes, some tax"], ["no", "No: $0 total tax or no return needed, for a full 12-month tax year as a U.S. citizen or resident all year"], ["", "Not sure (skip for now)"]] as const).map(([v, l]) => (
                 <label key={v || "skip"} className={`flex cursor-pointer items-start gap-2.5 rounded-xl border px-3 py-2.5 text-sm has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-white ${prior === v ? "border-white" : "border-zinc-800"}`}>
                   <input type="radio" name="su-prior" value={v} checked={prior === v} onChange={() => setPrior(v)} className="mt-0.5 accent-white" />{l}
                 </label>
