@@ -35,6 +35,8 @@ export interface Profile {
   priorYearTax?: "yes" | "no";
   /** V7: the data is typed-in totals with no dates, so nothing can be placed in a period or called late. */
   typedTotals?: boolean;
+  /** V2 (fallback): has a paycheck job this year. Wages are not modeled; a "yes" shows how much higher the income-tax part can be. */
+  paycheck?: "yes" | "no";
   balances: AccountBalance[];
   bills: Bill[];
 }

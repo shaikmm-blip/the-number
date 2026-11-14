@@ -177,3 +177,14 @@ describe("V7: typed-in totals in the itemized PDF", () => {
     expect(text).toContain(pdfUSD(r.incomeCents));
   });
 });
+
+describe("V2 fallback in the PDF", () => {
+  it("says wages aren't modeled and gives the range", () => {
+    const r = computeNumber(scaleBusiness(sample(), DEMO_FACTOR), { ...DEMO_PROFILE, paycheck: "yes" });
+    const text = pdfText(buildEstimatePdf(new jsPDF({ unit: "pt", format: "letter" }), r, { source: "Full-year sample business", generated: new Date("2026-11-13T12:00:00Z") })).replace(/\n/g, " ");
+    expect(text).toMatch(/Has a paycheck job: wages are not modeled/);
+    expect(text).toMatch(/\$2,717\.79 at 12%/);
+    expect(text).toMatch(/\$4,982\.61 at 22%/);
+    expect(text).toContain("$5,281.02");
+  });
+});

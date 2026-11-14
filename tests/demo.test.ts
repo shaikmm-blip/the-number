@@ -214,3 +214,21 @@ describe("V1/V4 follow-up 2: typed totals with No; no 'overdue' from typed data"
     expect(next.title + next.body).not.toMatch(/overdue/); // ("nothing is marked late" is the copy's own reassurance)
   });
 });
+
+describe("V2 fallback: a paycheck isn't modeled; Yes shows how much higher the income-tax part is", () => {
+  const txns = () => scaleBusiness(load(), DEMO_FACTOR);
+  it("hand-checked range for the sample: $22,648.24 taxable at 12% to 22% = $2,717.79 to $4,982.61; headline unchanged", () => {
+    // business part: 30,462.40 - half SE 2,152.10 = 28,310.30; minus 20% QBI 5,662.06 = 22,648.24
+    // 12%: 2,717.7888 -> 2,717.79;  22%: 4,982.6128 -> 4,982.61;  holds once wages reach 16,100 + 12,400 = 28,500
+    const r = computeNumber(txns(), { ...DEMO_PROFILE, paycheck: "yes" }, "2026-11-13");
+    expect(r.owedSoFarCents).toBe(528_102);
+    expect(r.paycheck).toBe("yes");
+    expect(r.paycheckRange).toEqual({ taxableCents: 2_264_824, lowCents: 271_779, highCents: 498_261, lowPct: 12, highPct: 22, wagesFromCents: 2_850_000 });
+  });
+  it("No or not answered: no notice, today's behavior", () => {
+    expect(computeNumber(txns(), { ...DEMO_PROFILE, paycheck: "no" }, "2026-11-13").paycheckRange).toBeUndefined();
+    const r = computeNumber(txns(), DEMO_PROFILE, "2026-11-13");
+    expect(r.paycheck).toBe("unknown");
+    expect(r.paycheckRange).toBeUndefined();
+  });
+});

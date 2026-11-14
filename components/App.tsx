@@ -44,11 +44,14 @@ export default function App() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<string>("");
   const [loadFail, setLoadFail] = useState(false);
-  const [draft, setDraft] = useState<{ name: string; email: string; business: string; prior: "" | "yes" | "no" }>({ name: "", email: "", business: "Pressure washing", prior: "" });
+  const [draft, setDraft] = useState<{ name: string; email: string; business: string; prior: "" | "yes" | "no"; paycheck: "" | "yes" | "no" }>({ name: "", email: "", business: "Pressure washing", prior: "", paycheck: "" });
   // V1: answer to "did last year's return show any total tax?" (signup, editable in Profile). Unset = not answered: the profile's own value stands.
   const [priorYear, setPriorYear] = useState<"yes" | "no" | "unknown" | undefined>(undefined);
   // The sample business has its own answer (Yes); a Profile change while viewing it lives here, so the person's own answer survives.
   const [samplePrior, setSamplePrior] = useState<"yes" | "no" | "unknown" | undefined>(undefined);
+  // V2 (fallback): "do you have a paycheck job?", kept the same way (the person's own, and a change made while viewing the sample).
+  const [paycheckAns, setPaycheckAns] = useState<"yes" | "no" | "unknown" | undefined>(undefined);
+  const [samplePaycheck, setSamplePaycheck] = useState<"yes" | "no" | "unknown" | undefined>(undefined);
   const loadSeq = useRef(0);
   const retryLoad = useRef<() => void>(() => {});
   const txnsRef = useRef<Txn[] | null>(null);
@@ -117,7 +120,13 @@ export default function App() {
   // Sample profiles carry their own answer (DEMO_PROFILE); own data starts unanswered (priorYearTax undefined).
   const isSample = profile.priorYearTax !== undefined;
   const answer = isSample ? samplePrior : priorYear;
-  const result = useMemo(() => (txns ? computeNumber(txns, answer ? { ...profile, priorYearTax: answer === "unknown" ? undefined : answer } : profile, today) : null), [txns, profile, today, answer]);
+  const paycheckNow = isSample ? samplePaycheck : paycheckAns;
+  const result = useMemo(() => {
+    if (!txns) return null;
+    let p = answer ? { ...profile, priorYearTax: answer === "unknown" ? undefined : answer } : profile;
+    if (paycheckNow) p = { ...p, paycheck: paycheckNow === "unknown" ? undefined : paycheckNow };
+    return computeNumber(txns, p, today);
+  }, [txns, profile, today, answer, paycheckNow]);
 
   function enter(note: string) { loadSeq.current++; epoch.current++; setBusy(""); setLoadFail(false); setSource(note); setTab("home"); go("app"); }
 
@@ -139,7 +148,7 @@ export default function App() {
       // Plaid sometimes hands back only the latest month on a brand-new test item. Need the whole year for an honest tax number.
       const first = (j.txns as Txn[]).reduce((m, t) => (t.date < m ? t.date : m), "9999");
       if ((j.txns as Txn[]).length < 120 || first > `${TAX_YEAR}-02-01`) throw new Error(`Plaid returned ${j.txns.length} transactions, not the full year yet`);
-      setProfile({ ...DEMO_PROFILE, asOf: localToday(), balances: j.balances }); setSamplePrior(undefined);
+      setProfile({ ...DEMO_PROFILE, asOf: localToday(), balances: j.balances }); setSamplePrior(undefined); setSamplePaycheck(undefined);
       setTxns(scaleBusiness(j.txns, f)); enter(via === "qbo" ? `QuickBooks Sandbox · ${bank} (sample business, pulled through a Plaid Sandbox test bank)` : ["Venmo", "Cash App", "PayPal", "Stripe"].includes(bank) ? `${bank} Sandbox (sample business)` : `Plaid Sandbox · ${bank} (test connection, sample business)`);
     } catch (e) {
       // Plaid unreachable (Wi-Fi, keys): fall back to the same data from local files so the demo never breaks.
@@ -157,7 +166,7 @@ export default function App() {
   async function loadFiles(note?: string, f = randomFactor(), current: () => boolean = () => true) {
     const sample = await sampleTxns();
     if (!current()) return;
-    setProfile(DEMO_PROFILE); setSamplePrior(undefined); // V1: the sample business answers for itself
+    setProfile(DEMO_PROFILE); setSamplePrior(undefined); setSamplePaycheck(undefined); // V1/V2: the sample business answers for itself
     setTxns(scaleBusiness(sample, f));
     enter(note || "Sample statements (Chase + Cash App + Venmo)");
   }
@@ -167,7 +176,7 @@ export default function App() {
     if (stageRef.current !== "connect") return;
     // Our Plaid Sandbox test user (Jay's business): pair the bank data with Jay's profile (age, bills he entered).
     if (data.balances.some((b) => b.name.startsWith("Jay's Pressure Washing"))) {
-      setProfile({ ...DEMO_PROFILE, asOf: localToday(), balances: data.balances }); setSamplePrior(undefined);
+      setProfile({ ...DEMO_PROFILE, asOf: localToday(), balances: data.balances }); setSamplePrior(undefined); setSamplePaycheck(undefined);
       setTxns(data.txns); enter("Your bank via Plaid (Sandbox test user)"); return;
     }
     setProfile({ ...DEMO_PROFILE, ownerName: account?.name || "You", businessName: account ? `${account.name}'s ${account.business.toLowerCase()}` : "Your business", age: 0, parentRule: undefined, priorYearTax: undefined, balances: data.balances, bills: [], asOf: localToday() });
@@ -197,13 +206,13 @@ export default function App() {
   function notify(a: Alert) { setToast(a); window.setTimeout(() => setToast(null), 6500); }
   const clock = () => new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
 
-  function signOut() { setAccount(null); setTxns(null); setDraft({ name: "", email: "", business: "Pressure washing", prior: "" }); setPriorYear(undefined); setSamplePrior(undefined); home(); }
+  function signOut() { setAccount(null); setTxns(null); setDraft({ name: "", email: "", business: "Pressure washing", prior: "", paycheck: "" }); setPriorYear(undefined); setSamplePrior(undefined); setPaycheckAns(undefined); setSamplePaycheck(undefined); home(); }
 
   const veil = busy === "bank" || loadFail ? <LoadVeil failed={loadFail} onRetry={() => retryLoad.current()} onClose={() => { setLoadFail(false); window.setTimeout(() => lastFocus.current?.focus(), 0); }} /> : null;
   // While the veil is up, the page behind it cannot be focused or pressed. (React 18 passes inert through only as a string.)
   const hush: object = veil ? { inert: "" } : {};
   if (stage === "landing") return <><div {...hush}><Landing onStart={() => go("signup")} onSignIn={() => go("signup")} onDemo={() => loadSampleBank()} busy={busy === "bank"} /></div>{veil}</>;
-  if (stage === "signup") return <SignUp draft={draft} onDraft={setDraft} onBack={back} onHome={home} onDone={(a) => { setAccount({ ...a, plan: account?.plan }); setPriorYear(a.priorYearTax); go("pricing"); }} />;
+  if (stage === "signup") return <SignUp draft={draft} onDraft={setDraft} onBack={back} onHome={home} onDone={(a) => { setAccount({ ...a, plan: account?.plan }); setPriorYear(a.priorYearTax); setPaycheckAns(a.paycheck); go("pricing"); }} />;
   // Changing plan from inside the app goes straight back to the number; during setup the next step is still Connect.
   if (stage === "pricing") return <Pricing name={account?.name || "friend"} current={account?.plan} onBack={back} onHome={home} onPick={(plan) => { const toApp = planFromApp.current && !!txns; setAccount({ ...(account || { name: "", email: "", business: "" }), plan }); go(toApp ? "app" : "connect"); }} />;
   if (stage === "connect" || !txns || !result) return <><div {...hush}><Connect onBack={back} onHome={home} onPlaidSandbox={loadSampleBank} onQuickBooksSandbox={(bank) => loadSampleBank(bank, "qbo")} onPlaid={plaidFor(epoch.current)} onCsv={onCsv} onTyped={onTyped} busy={busy} error={error} /></div>{veil}</>;
@@ -244,7 +253,7 @@ export default function App() {
         {tab === "alerts" && <Alerts r={result} go={setTab} prefs={prefs} setPref={setPref} />}
         {tab === "settle" && <Settle r={result} />}
         {tab === "learn" && <Learn r={result} />}
-        {tab === "profile" && <Profile r={result} txns={txns} account={account} source={source} plan={PLAN_NAME[account?.plan || "free"]} onReconnect={() => go("connect")} onEditInfo={() => go("signup")} onChangePlan={() => go("pricing")} onSignOut={signOut} onPriorYear={(v) => { if (isSample) { setSamplePrior(v); return; } setPriorYear(v); setDraft((d) => ({ ...d, prior: v === "unknown" ? "" : v })); }} />}
+        {tab === "profile" && <Profile r={result} txns={txns} account={account} source={source} plan={PLAN_NAME[account?.plan || "free"]} onReconnect={() => go("connect")} onEditInfo={() => go("signup")} onChangePlan={() => go("pricing")} onSignOut={signOut} onPriorYear={(v) => { if (isSample) { setSamplePrior(v); return; } setPriorYear(v); setDraft((d) => ({ ...d, prior: v === "unknown" ? "" : v })); }} onPaycheck={(v) => { if (isSample) { setSamplePaycheck(v); return; } setPaycheckAns(v); setDraft((d) => ({ ...d, paycheck: v === "unknown" ? "" : v })); }} />}
         <p className="muted pb-4 pt-2 text-center text-xs">Data: {source}. Educational estimate, not tax advice.</p>
       </main>
 
@@ -377,6 +386,7 @@ function Home({ r, openLine, setWhy, txns, go, source }: { r: NumberResult; open
         <div className="font-display num mt-3 text-[clamp(4rem,13vw,8rem)] font-semibold leading-none tracking-tight">{usd(shown)}</div>
         {r.asOf < r.today && <p className="mt-2 text-xs text-zinc-400">{/sample/i.test(source) ? "Sample data" : "Data"} through {fmtDate(r.asOf, true)}</p>}
         <p className="mx-auto mt-4 max-w-md text-zinc-400">Federal tax on your {TAX_YEAR} business profit as a sole proprietor, minus anything you've already paid.</p>
+        {r.paycheckRange && <PaycheckNotice r={r} />}
         <button className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-zinc-300 underline-offset-4 hover:text-white hover:underline" onClick={() => setWhy({ title: `How we estimated ${formatUSD(r.owedSoFarCents)}`, body: taxLines.map((l) => `${l.label}: ${formatUSD(l.amountCents)}. ${l.why}`).join("\n\n") })}>Why this much? <Info size={14} /></button>
       </section>
 
@@ -452,6 +462,7 @@ function Settle({ r }: { r: NumberResult }) {
       <div className="text-center">
         <h1 className="font-display mt-3 text-4xl font-semibold">Settle up</h1>
         <p className="muted mt-1">Pay the IRS without the maze.</p>
+        {r.paycheckRange && <p className="mx-auto mt-3 max-w-sm text-sm text-zinc-300" data-paycheck-settle>You have a paycheck job, so the income-tax part will be higher than this estimate: about {formatUSD(r.paycheckRange.lowCents)} to {formatUSD(r.paycheckRange.highCents)} instead of {formatUSD(r.fed.incomeTaxCents)} with wages of {formatUSD(r.paycheckRange.wagesFromCents)} or more (see Home).</p>}
         {r.priorYear === "no" && <p className="mx-auto mt-3 max-w-sm text-sm text-zinc-300">You said last year&apos;s total tax was $0, so estimated payments aren&apos;t required this year. This estimate is due with your {TAX_YEAR} return; paying some of it early is optional.</p>}
         <p className="mx-auto mt-3 max-w-sm text-xs leading-relaxed text-zinc-400">This is an estimate from your data &mdash; double-check the amount and your details on the IRS page before you pay. Educational estimate, not tax advice.</p>
       </div>
@@ -552,7 +563,7 @@ function PayAssist({ r, amountFmt, year, onClose }: { r: NumberResult; amountFmt
 
 /* ---------- Profile / settings ---------- */
 
-function Profile({ r, txns, account, source, plan, onReconnect, onEditInfo, onChangePlan, onSignOut, onPriorYear }: { r: NumberResult; txns: Txn[]; account: Account | null; source: string; plan: string; onReconnect: () => void; onEditInfo: () => void; onChangePlan: () => void; onSignOut: () => void; onPriorYear: (v: "yes" | "no" | "unknown") => void }) {
+function Profile({ r, txns, account, source, plan, onReconnect, onEditInfo, onChangePlan, onSignOut, onPriorYear, onPaycheck }: { r: NumberResult; txns: Txn[]; account: Account | null; source: string; plan: string; onReconnect: () => void; onEditInfo: () => void; onChangePlan: () => void; onSignOut: () => void; onPriorYear: (v: "yes" | "no" | "unknown") => void; onPaycheck: (v: "yes" | "no" | "unknown") => void }) {
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState("");
   const hasMonthlyTotals = txns.some(isQuickBooksMonthlyEntry);
@@ -588,6 +599,13 @@ function Profile({ r, txns, account, source, plan, onReconnect, onEditInfo, onCh
           {rows.map(([k, v]) => <div key={k} className="flex justify-between gap-4 border-b py-2 text-sm"><dt className="muted">{k}</dt><dd className="font-medium">{v}</dd></div>)}
         </dl>
         {/* V1: editable answer; "No" turns off late periods and the penalty (IRS no-prior-year-tax exception). */}
+        {/* V2 (fallback): wages aren't modeled; "Yes" shows how much higher the income-tax part can be. */}
+        <label className="mt-4 block text-sm font-medium" htmlFor="pf-paycheck">Do you also have a paycheck job this year?</label>
+        <select id="pf-paycheck" className="input mt-1.5" value={r.paycheck === "unknown" ? "" : r.paycheck} onChange={(e) => onPaycheck((e.target.value || "unknown") as "yes" | "no" | "unknown")}>
+          <option value="no">No</option>
+          <option value="yes">Yes</option>
+          <option value="">Not sure</option>
+        </select>
         <label className="mt-4 block text-sm font-medium" htmlFor="pf-prior">Did last year&apos;s tax return show any total tax?</label>
         <select id="pf-prior" className="input mt-1.5" value={r.priorYear === "unknown" ? "" : r.priorYear} onChange={(e) => onPriorYear((e.target.value || "unknown") as "yes" | "no" | "unknown")}>
           <option value="yes">Yes, some tax</option>
@@ -897,6 +915,16 @@ function Learn({ r }: { r: NumberResult }) {
         <ul className="mt-2 space-y-1">{Object.entries(SOURCES).map(([k, u]) => <li key={k}><a className="underline" href={u} target="_blank" rel="noreferrer">{SOURCE_TITLES[k as keyof typeof SOURCES]}</a></li>)}</ul>
       </details>
     </>
+  );
+}
+
+// V2 (fallback): a paycheck is not modeled yet. Say plainly that the income-tax part is higher, with the range from the bracket rates.
+function PaycheckNotice({ r }: { r: NumberResult }) {
+  const p = r.paycheckRange!;
+  return (
+    <div className="mx-auto mt-4 max-w-md rounded-2xl border border-zinc-700 p-4 text-left text-sm text-zinc-300" role="note" data-paycheck-notice>
+      <b className="text-white">You have a paycheck job, so the income-tax part is higher than shown.</b> This estimate treats the business as your only income. With wages of {formatUSD(p.wagesFromCents)} or more (enough to use up the {formatUSD(TAX_2026.standardDeductionCents)} standard deduction and the 10% bracket), the business&apos;s taxable part ({formatUSD(p.taxableCents, { cents: true })}) is taxed at {p.lowPct}% or more: about {formatUSD(p.lowCents, { cents: true })} at {p.lowPct}% to {formatUSD(p.highCents, { cents: true })} at {p.highPct}% of income tax, instead of {formatUSD(r.fed.incomeTaxCents, { cents: true })}. Higher wages can mean a higher bracket. An estimate that includes your wages isn&apos;t supported yet.
+    </div>
   );
 }
 

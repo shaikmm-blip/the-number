@@ -1,4 +1,4 @@
-import { federalEstimate, formatUSD, type FederalEstimate } from "./tax";
+import { federalEstimate, formatUSD, pct, type FederalEstimate } from "./tax";
 import { TAX_2026, TAX_YEAR } from "./taxConfig";
 import { CURRENT_RATE_PCT, penaltySummary, type PenaltySummary } from "./penalty";
 import type { Profile, Txn } from "./types";
@@ -86,6 +86,9 @@ export interface NumberResult {
   topCategories: { category: string; amountCents: number }[];
   alerts: Alert[];
   quarters: Quarter[];
+  /** V2 (fallback): paycheck answer, and for "yes" the range of income tax on the business if wages cover the standard deduction. */
+  paycheck: "yes" | "no" | "unknown";
+  paycheckRange?: { taxableCents: number; lowCents: number; highCents: number; lowPct: number; highPct: number; wagesFromCents: number };
   /** V1: the answer to "did you have total tax last year?" */
   priorYear: "yes" | "no" | "unknown";
   /** V4: estimated late-payment penalty on the late, unpaid periods (Form 2210 method). */
@@ -154,6 +157,13 @@ export function computeNumber(txns: Txn[], profile: Profile, today = profile.asO
   const topCategories = [...catMap.entries()].map(([category, amountCents]) => ({ category, amountCents })).sort((a, b) => b.amountCents - a.amountCents);
 
   const quarters = quarterBreakdown(txns, asOf, paid);
+  // V2 fallback (no new tax formula in the engine): if paycheck wages use up the standard deduction, the business's taxable part is its
+  // profit minus half of SE tax minus the full 20% QBI deduction, taxed at the next bracket rates (12% to 22%) instead of the estimate's.
+  const paycheck = profile.paycheck ?? "unknown";
+  const bizBase = Math.max(0, fed.netProfitCents - fed.halfSeDeductionCents);
+  const bizTaxable = bizBase - pct(bizBase, TAX_2026.qbiBps);
+  const [lowRate, highRate] = [TAX_2026.brackets[1].rateBps, TAX_2026.brackets[2].rateBps];
+  const paycheckRange = paycheck === "yes" ? { taxableCents: bizTaxable, lowCents: pct(bizTaxable, lowRate), highCents: pct(bizTaxable, highRate), lowPct: lowRate / 100, highPct: highRate / 100, wagesFromCents: TAX_2026.standardDeductionCents + TAX_2026.brackets[0].upToCents } : undefined;
   const missedQ = quarters.filter((q) => q.status === "missed" && q.remainingCents > 0);
   const building = quarters.find((q) => q.status === "building");
   // V4: dated payments (the tax-payment rows' own dates) go to the earliest unpaid period. Typed totals have no dates, so no penalty (V7).
@@ -175,6 +185,6 @@ export function computeNumber(txns: Txn[], profile: Profile, today = profile.asO
     taxPaidCents: paid, owedSoFarCents: owed, cushionCents: cushion, billsCents: bills, theNumberCents: theNumber,
     balanceCents: balance, safeToSpendCents: safe, saveThisMonthCents: saveThisMonth,
     next: { quarter: upcoming.quarter, due: upcoming.due, daysLeft, amountCents: owed }, missed,
-    lines, monthly, topCategories, alerts, quarters, penalty, priorYear,
+    lines, monthly, topCategories, alerts, quarters, penalty, priorYear, paycheck, paycheckRange,
   };
 }
