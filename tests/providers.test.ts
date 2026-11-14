@@ -174,7 +174,7 @@ describe("Plaid Link success → exchange → import (mocked Plaid API, real exc
     const { POST } = await import("@/app/api/plaid/exchange/route");
     const { finishPlaidLink } = await import("@/lib/plaidLink");
     const res = await finishPlaidLink("p", { institution: "First Platypus Bank", sandbox: true }, await viaRoute(POST));
-    expect(res).toEqual({ kind: "pending", message: "Connected to First Platypus Bank, but Plaid is still loading earlier transactions. Try again in a minute." });
+    expect(res).toEqual({ kind: "pending", message: "Connected to First Platypus Bank, but Plaid is still loading earlier transactions. Check again in a minute." });
   });
   it("no transactions yet is an honest empty state; a failed exchange shows Plaid's message", async () => {
     const client = fakeClient("HISTORICAL_UPDATE_COMPLETE", []);
@@ -189,5 +189,38 @@ describe("Plaid Link success → exchange → import (mocked Plaid API, real exc
     const f2 = await import("@/lib/plaidLink");
     expect(await f2.finishPlaidLink("p", { sandbox: true }, await viaRoute(POST))).toEqual({ kind: "error", message: "Couldn't connect the bank: the public token has expired" });
     expect((await f2.finishPlaidLink("p", { sandbox: true }, (async () => { throw new Error("offline"); }) as unknown as typeof fetch)).kind).toBe("error");
+  });
+});
+
+describe("Check again: the same connected item, no new Link and no second token exchange (mocked)", () => {
+  it("pending, then complete through /api/plaid/sync with the item's cookie, keeping the bank and sandbox label", async () => {
+    const itemPublicTokenExchange = vi.fn(async () => ({ data: { access_token: "access-sandbox-picked" } }));
+    vi.doMock("@/lib/plaid", async (orig) => ({ ...(await orig<typeof import("@/lib/plaid")>()), plaidClient: () => ({ itemPublicTokenExchange }) }));
+    const txn = { id: "plaid-t1", date: "2026-03-02", source: "Plaid · Plaid Checking", description: "Zelle from customer", amountCents: 25_000, kind: "business_income", reason: "" };
+    const syncAll = vi.fn()
+      .mockResolvedValueOnce({ txns: [txn], balances: [], complete: false }) // during the exchange: history still loading
+      .mockResolvedValueOnce({ txns: [txn], balances: [{ name: "Plaid Checking", balanceCents: 100 }], complete: true }); // on "Check again"
+    vi.doMock("@/app/api/plaid/sync/sync", () => ({ syncAll }));
+    const exchange = await import("@/app/api/plaid/exchange/route");
+    const sync = await import("@/app/api/plaid/sync/route");
+    const fetcher = (async (url: string, init?: RequestInit) => {
+      const req = new Request(`${ORIGIN}${url}`, init);
+      return url === "/api/plaid/exchange" ? exchange.POST(req) : url === "/api/plaid/sync" ? sync.POST() : new Response("{}", { status: 404 });
+    }) as unknown as typeof fetch;
+    const { finishPlaidLink, retryPlaidSync } = await import("@/lib/plaidLink");
+    const ctx = { institution: "First Platypus Bank", sandbox: true };
+    expect((await finishPlaidLink("public-sandbox-picked", ctx, fetcher)).kind).toBe("pending");
+    const res = await retryPlaidSync(ctx, fetcher);
+    expect(itemPublicTokenExchange).toHaveBeenCalledTimes(1); // the public token is never exchanged twice
+    expect(syncAll).toHaveBeenCalledTimes(2);
+    expect(syncAll.mock.calls.map((c) => c[1])).toEqual(["access-sandbox-picked", "access-sandbox-picked"]); // same item both times
+    expect(res).toEqual({ kind: "data", txns: [txn], balances: [{ name: "Plaid Checking", balanceCents: 100 }], source: "Plaid Sandbox · First Platypus Bank (test bank, fictional data)" });
+  });
+  it("Check again without a connected item says so plainly", async () => {
+    vi.doMock("@/lib/plaid", async (orig) => ({ ...(await orig<typeof import("@/lib/plaid")>()), plaidClient: () => ({}) }));
+    const sync = await import("@/app/api/plaid/sync/route");
+    const { retryPlaidSync } = await import("@/lib/plaidLink");
+    const res = await retryPlaidSync({ sandbox: true }, (async () => sync.POST()) as unknown as typeof fetch);
+    expect(res).toEqual({ kind: "error", message: "Connect a bank first." });
   });
 });

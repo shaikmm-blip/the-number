@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { usePlaidLink, type PlaidLinkError, type PlaidLinkOnSuccessMetadata } from "react-plaid-link";
-import { finishPlaidLink } from "@/lib/plaidLink";
+import { finishPlaidLink, retryPlaidSync, type LinkContext, type LinkResult } from "@/lib/plaidLink";
 import type { Profile, Txn } from "@/lib/types";
 
 /**
@@ -20,17 +20,26 @@ export function PlaidButton({ onData, sandbox = true, label = "Connect with Plai
   const [token, setToken] = useState<string | null>(null);
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
+  // Set after a connected item had no transactions yet or was still loading: "Check again" reads that same item.
+  const [waiting, setWaiting] = useState<LinkContext | null>(null);
+
+  const settle = useCallback((res: LinkResult, ctx: LinkContext) => {
+    if (res.kind === "data") { setWaiting(null); setMsg(""); onData({ txns: res.txns, balances: res.balances, source: res.source }); return; }
+    setWaiting(res.kind === "error" ? null : ctx); setMsg(res.message);
+  }, [onData]);
 
   const onSuccess = useCallback(async (public_token: string, meta: PlaidLinkOnSuccessMetadata) => {
     setToken(null);
+    const ctx = { institution: meta.institution?.name || undefined, sandbox };
     setBusy(true); setMsg("Pulling your transactions…");
-    try {
-      const res = await finishPlaidLink(public_token, { institution: meta.institution?.name || undefined, sandbox });
-      if (res.kind !== "data") { setMsg(res.message); return; }
-      setMsg("");
-      onData({ txns: res.txns, balances: res.balances, source: res.source });
-    } finally { setBusy(false); }
-  }, [onData, sandbox]);
+    try { settle(await finishPlaidLink(public_token, ctx), ctx); } finally { setBusy(false); }
+  }, [sandbox, settle]);
+
+  async function checkAgain() {
+    if (!waiting) return;
+    setBusy(true); setMsg("Checking again…");
+    try { settle(await retryPlaidSync(waiting), waiting); } finally { setBusy(false); }
+  }
 
   // Plaid passes an error when Link itself failed; a plain cancel has none and stays silent.
   const onExit = useCallback((err: PlaidLinkError | null) => {
@@ -40,7 +49,7 @@ export function PlaidButton({ onData, sandbox = true, label = "Connect with Plai
   const onLoadError = useCallback(() => { setToken(null); setBusy(false); setMsg("Plaid couldn't load. Check your connection and try again."); }, []);
 
   async function start() {
-    setMsg(""); setBusy(true);
+    setMsg(""); setWaiting(null); setBusy(true);
     try {
       const r = await fetch("/api/plaid/link-token", { method: "POST" });
       const j = await r.json().catch(() => ({}));
@@ -52,7 +61,14 @@ export function PlaidButton({ onData, sandbox = true, label = "Connect with Plai
 
   return (
     <div className="flex flex-col gap-2">
-      <button className={`btn w-full !rounded-xl !py-3.5 ${primary ? "btn-primary" : "btn-ghost"}`} onClick={start} disabled={busy || !!token} aria-busy={busy || !!token || undefined}>{busy || token ? "Opening…" : label}</button>
+      {waiting ? (
+        <>
+          <button className={`btn w-full !rounded-xl !py-3.5 ${primary ? "btn-primary" : "btn-ghost"}`} onClick={checkAgain} disabled={busy} aria-busy={busy || undefined}>{busy ? "Checking…" : `Check ${waiting.institution || "your bank"} again`}</button>
+          <button className="text-xs text-zinc-400 underline-offset-2 hover:text-white hover:underline" onClick={start} disabled={busy}>Connect a different bank</button>
+        </>
+      ) : (
+        <button className={`btn w-full !rounded-xl !py-3.5 ${primary ? "btn-primary" : "btn-ghost"}`} onClick={start} disabled={busy || !!token} aria-busy={busy || !!token || undefined}>{busy || token ? "Opening…" : label}</button>
+      )}
       {token && <LinkOpener token={token} onSuccess={onSuccess} onExit={onExit} onLoadError={onLoadError} />}
       {msg && <span className="text-xs" style={{ color: "var(--muted)" }} role="status">{msg}</span>}
     </div>
