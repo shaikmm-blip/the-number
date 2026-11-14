@@ -6,7 +6,7 @@ import { AlertTriangle, ArrowRight, Check, ChevronDown, Loader2, Lightbulb, Lock
 import { classify } from "@/lib/classify";
 import { latestBalance, normalize } from "@/lib/csv";
 import { DEMO_FILES, DEMO_PROFILE } from "@/lib/demo";
-import { computeNumber, dueIn, localToday, periodLeft, type Alert, type Line, type NumberResult } from "@/lib/number";
+import { computeNumber, dueIn, localToday, nextProfitTaxCents, periodLeft, type Alert, type Line, type NumberResult } from "@/lib/number";
 import { federalEstimate, formatUSD } from "@/lib/tax";
 import { randomFactor, scaleBusiness } from "@/lib/scale";
 import { ASSUMPTIONS, SOURCES, SOURCE_TITLES, TAX_2026, TAX_YEAR } from "@/lib/taxConfig";
@@ -592,6 +592,7 @@ function Breakdown({ r, source }: { r: NumberResult; source: string }) {
   const usd = (c: number) => formatUSD(c, { cents: true });
   const total = f.se.totalCents + f.incomeTaxCents;
   const per100 = f.netProfitCents > 0 ? (total / f.netProfitCents) * 100 : 0;
+  const next100 = nextProfitTaxCents(f.netProfitCents); // V3: what the next $100 of profit adds (engine difference)
   const steps: [string, string, string, number][] = [
     ["1", "You made", "Money in, minus business costs (your profit)", f.netProfitCents],
     ["2", "Self-employment tax", "15.3% on most of your profit. It pays your Social Security and Medicare.", f.se.totalCents],
@@ -603,11 +604,13 @@ function Breakdown({ r, source }: { r: NumberResult; source: string }) {
 
       {/* The one picture: out of every $100 you made */}
       <div className="mt-6">
-        <div className="flex items-baseline justify-between gap-3 text-sm"><span>Out of every <b>$100</b> you made</span><span><b className="num">${per100.toFixed(2)}</b> goes to taxes</span></div>
+        <div className="flex items-baseline justify-between gap-3 text-sm"><span>Average so far: out of every <b>$100</b> you made</span><span className="shrink-0"><b className="num">${per100.toFixed(2)}</b> goes to taxes</span></div>
         <div className="mt-2 h-6 overflow-hidden rounded-full border border-white/70 bg-black" role="img" aria-label={`${per100.toFixed(1)} percent of your profit goes to taxes`}>
           <div className="h-full rounded-full bg-white transition-all duration-700" style={{ width: `${Math.min(100, per100)}%` }} />
         </div>
         <div className="mt-1.5 flex justify-between text-xs text-zinc-400"><span><span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-white align-middle" />taxes</span><span><span className="mr-1.5 inline-block h-2 w-2 rounded-full border border-white/70 align-middle" />yours to keep</span></div>
+        <p className="mt-3 text-sm" data-next100={next100}>Your next <b>$100</b> of profit adds an estimated <b className="num">{usd(next100)}</b> in tax{f.taxableIncomeCents > 0 && next100 > Math.round(per100 * 100) ? <>, more than the average: your deductions are already used by the profit you&apos;ve made, so new profit is taxed at your top rate</> : null}.</p>
+        <p className="mt-1 text-xs text-zinc-400">Federal tax only. State and city taxes are not included.</p>
       </div>
 
       {/* Three plain steps */}

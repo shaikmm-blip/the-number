@@ -18,6 +18,10 @@ export function periodLeft(endIso: string, today: string) {
   return d > 0 ? `${d} day${d === 1 ? "" : "s"} to go` : d === 0 ? "ends today" : "ended";
 }
 
+/** V3: estimated extra federal tax on the next `stepCents` of profit. No new formula: the engine run twice, then the difference. */
+export const nextProfitTaxCents = (netProfitCents: number, stepCents = 10_000) =>
+  federalEstimate(netProfitCents + stepCents).totalTaxCents - federalEstimate(netProfitCents).totalTaxCents;
+
 export interface Line { key: string; label: string; amountCents: number; why: string; txnIds?: string[] }
 export interface Alert { id: string; level: "critical" | "warning" | "info"; title: string; body: string }
 

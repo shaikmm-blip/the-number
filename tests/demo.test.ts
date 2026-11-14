@@ -105,3 +105,22 @@ describe("V5: day counts use the viewer's real date", () => {
     expect(localToday(new Date(2026, 0, 1, 0, 5))).toBe("2026-01-01");
   });
 });
+
+import { nextProfitTaxCents } from "../lib/number";
+import { toCents } from "../lib/tax";
+describe("V3: what the next $100 of profit adds", () => {
+  it("equals engine(profit + $100) minus engine(profit) for the sample", () => {
+    const r = computeNumber(scaleBusiness(load(), DEMO_FACTOR), DEMO_PROFILE, "2026-11-13");
+    const p = r.netProfitCents;
+    expect(nextProfitTaxCents(p)).toBe(federalEstimate(p + 10_000).totalTaxCents - federalEstimate(p).totalTaxCents);
+    // the next $100 costs more than the average $100 for the sample (income tax is in the 12% bracket)
+    expect(nextProfitTaxCents(p)).toBeGreaterThan(Math.round((r.fed.totalTaxCents / p) * 10_000));
+  });
+  it("hand-checked for a $10,000 profit (under the standard deduction): self-employment tax only, $14.12", () => {
+    // $10,000: SE earnings 9,235.00 -> SS 1,145.14, Medicare 267.82 (267.815 rounds up). $10,100: 9,327.35 -> SS 1,156.59, Medicare 270.49.
+    // Difference: 11.45 + 2.67 = 14.12. AGI stays under the $16,100 standard deduction both times, so no income tax.
+    const p = toCents("10000");
+    expect(nextProfitTaxCents(p)).toBe(federalEstimate(p + 10_000).totalTaxCents - federalEstimate(p).totalTaxCents);
+    expect(nextProfitTaxCents(p)).toBe(1_412);
+  });
+});
