@@ -17,3 +17,48 @@ describe("typed money entries", () => {
   it("needs an amount", () => expect(parseEntry("got paid")).toHaveProperty("error"));
   it("needs a direction", () => expect(parseEntry("$50 sneakers")).toHaveProperty("error"));
 });
+
+import { readFileSync } from "node:fs";
+import { classify } from "../lib/classify";
+import { normalize } from "../lib/csv";
+import { DEMO_PROFILE } from "../lib/demo";
+import { computeNumber } from "../lib/number";
+import { DEMO_FACTOR, scaleBusiness } from "../lib/scale";
+import { parseTypedAmount, typedTotalsTxns } from "../lib/entry";
+describe("V7: type in income and costs", () => {
+  const sample = computeNumber(scaleBusiness(["chase", "cashapp", "venmo"].flatMap((f) => normalize(readFileSync(`public/demo/${f}.csv`, "utf8"), `${f}.csv`)).map(classify), DEMO_FACTOR), DEMO_PROFILE, "2026-11-13");
+  const typedProfile = { ...DEMO_PROFILE, typedTotals: true, priorYearTax: undefined, balances: [], bills: [], asOf: "2026-11-13" };
+  const typed = (paidCents = 0) => computeNumber(typedTotalsTxns({ incomeCents: sample.incomeCents, costsCents: sample.expensesCents, paidCents }, "2026-11-13"), typedProfile, "2026-11-13");
+  it("typing the sample's income and costs gives the sample's annual estimate to the cent", () => {
+    const r = typed();
+    expect(r.incomeCents).toBe(sample.incomeCents);
+    expect(r.expensesCents).toBe(sample.expensesCents);
+    expect(r.fed.totalTaxCents).toBe(sample.fed.totalTaxCents);
+    expect(r.owedSoFarCents).toBe(528_102);
+  });
+  it("nothing is called late from typed data; the next payment is shown and the missing dates are explained", () => {
+    const r = typed();
+    expect(r.missed).toEqual([]);
+    expect(r.quarters.some((q) => q.status === "missed")).toBe(false);
+    expect(r.penalty.lateCount).toBe(0);
+    expect(r.alerts.some((a) => a.id === "missed")).toBe(false);
+    const next = r.alerts.find((a) => a.id === "next")!;
+    expect(next.title).toContain("2027-01-15");
+    expect(next.body).toMatch(/no dates/);
+    expect(next.body).toMatch(/CSV upload or a bank connection/);
+  });
+  it("tax already paid comes off the estimate", () => {
+    expect(typed(100_000).owedSoFarCents).toBe(528_102 - 100_000);
+  });
+  it("validates what was typed", () => {
+    expect(parseTypedAmount("18,500", "income")).toBe(1_850_000);
+    expect(parseTypedAmount("$3,450.5", "income")).toBe(345_050);
+    expect(parseTypedAmount(" 0 ", "income")).toBe(0);
+    expect(parseTypedAmount("", "tax paid", true)).toBe(0);
+    expect(parseTypedAmount("", "income")).toEqual({ error: expect.stringMatching(/Enter your income/) });
+    expect(parseTypedAmount("-5", "income")).toEqual({ error: expect.stringMatching(/no minus sign/) });
+    expect(parseTypedAmount("12.345", "income")).toEqual({ error: expect.stringMatching(/dollar amount/) });
+    expect(parseTypedAmount("abc", "income")).toEqual({ error: expect.stringMatching(/dollar amount/) });
+    expect(parseTypedAmount("20000000", "income")).toEqual({ error: expect.stringMatching(/over \$10,000,000/) });
+  });
+});

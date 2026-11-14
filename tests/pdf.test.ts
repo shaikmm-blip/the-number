@@ -159,3 +159,21 @@ describe("itemized estimate export", () => {
     expect(long).toEqual(original);
   });
 });
+
+import { typedTotalsTxns } from "../lib/entry";
+describe("V7: typed-in totals in the itemized PDF", () => {
+  const txns = typedTotalsTxns({ incomeCents: 3_391_213, costsCents: 344_973, paidCents: 50_000 }, "2026-11-13");
+  const r = computeNumber(txns, { ...DEMO_PROFILE, typedTotals: true, priorYearTax: undefined, balances: [], bills: [], asOf: "2026-11-13" }, "2026-11-13");
+  const text = pdfText(buildEstimatePdf(new jsPDF({ unit: "pt", format: "letter" }), r, { source: "Typed in by you", generated: new Date("2026-11-13T12:00:00Z") }, txns));
+  it("says the rows are typed totals, not individual transactions, and shows no dates for them", () => {
+    expect(text).toMatch(/Typed-in rows are totals for the year so far/);
+    expect(text).toMatch(/not individual transactions/);
+    expect(text.split("\n").filter((l) => l === "no date").length).toBe(3);
+    expect(text.split("\n")).not.toContain("2026-11-13");
+    expect(text).toContain("Typed in by you | Typed-in total, year so far");
+  });
+  it("totals still match the screen", () => {
+    expect(text).toContain(pdfUSD(r.owedSoFarCents));
+    expect(text).toContain(pdfUSD(r.incomeCents));
+  });
+});

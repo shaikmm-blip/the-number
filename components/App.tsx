@@ -15,6 +15,7 @@ import { buildEstimatePdf, isQuickBooksMonthlyEntry } from "@/lib/pdf";
 import { CURRENT_RATE_PCT, PENALTY_SOURCES } from "@/lib/penalty";
 import { formGuide, GUIDE_CHECKED, GUIDE_SOURCES } from "@/lib/guide";
 import type { Profile, Txn } from "@/lib/types";
+import { TYPED_SOURCE, typedTotalsTxns, type TypedTotals } from "@/lib/entry";
 import { Connect, Landing, Logo, Pricing, SignUp, ThemeToggle, type Account } from "./Onboarding";
 
 type Tab = "home" | "alerts" | "learn" | "settle" | "profile";
@@ -177,6 +178,13 @@ export default function App() {
     setTxns(rows); enter("Your CSV upload");
   }
 
+  // V7: totals typed in by hand go through the same path, as undated year-to-date rows. Nothing is placed in a period or called late.
+  function onTyped(t: TypedTotals) {
+    const today = localToday(), lastDay = `${TAX_YEAR}-12-31`;
+    setProfile({ ...DEMO_PROFILE, ownerName: account?.name || "You", businessName: account?.business || "Your business", age: 0, parentRule: undefined, priorYearTax: undefined, typedTotals: true, balances: [], bills: [], asOf: today < lastDay ? today : lastDay });
+    setTxns(typedTotalsTxns(t, today < lastDay ? today : lastDay)); enter(TYPED_SOURCE);
+  }
+
   function setKind(id: string, kind: "business_income" | "personal" | "business_expense") {
     setTxns((ts) => ts!.map((t) => t.id === id ? { ...t, kind, userSet: true, category: kind === "personal" ? "Personal" : kind === "business_income" ? "Customer payment" : "Business expense", reason: "You told us." } : t));
   }
@@ -193,7 +201,7 @@ export default function App() {
   if (stage === "signup") return <SignUp draft={draft} onDraft={setDraft} onBack={back} onHome={home} onDone={(a) => { setAccount({ ...a, plan: account?.plan }); setPriorYear(a.priorYearTax); go("pricing"); }} />;
   // Changing plan from inside the app goes straight back to the number; during setup the next step is still Connect.
   if (stage === "pricing") return <Pricing name={account?.name || "friend"} current={account?.plan} onBack={back} onHome={home} onPick={(plan) => { const toApp = planFromApp.current && !!txns; setAccount({ ...(account || { name: "", email: "", business: "" }), plan }); go(toApp ? "app" : "connect"); }} />;
-  if (stage === "connect" || !txns || !result) return <><div {...hush}><Connect onBack={back} onHome={home} onPlaidSandbox={loadSampleBank} onQuickBooksSandbox={(bank) => loadSampleBank(bank, "qbo")} onPlaid={plaidFor(epoch.current)} onCsv={onCsv} busy={busy} error={error} /></div>{veil}</>;
+  if (stage === "connect" || !txns || !result) return <><div {...hush}><Connect onBack={back} onHome={home} onPlaidSandbox={loadSampleBank} onQuickBooksSandbox={(bank) => loadSampleBank(bank, "qbo")} onPlaid={plaidFor(epoch.current)} onCsv={onCsv} onTyped={onTyped} busy={busy} error={error} /></div>{veil}</>;
 
   const byId = new Map(txns.map((t) => [t.id, t]));
   const openLine = (l: Line) => setWhy({ title: l.label, body: l.why, txns: l.txnIds?.map((i) => byId.get(i)!).filter(Boolean).slice(-6) });
@@ -315,6 +323,7 @@ function Home({ r, openLine, setWhy, txns, go, source }: { r: NumberResult; open
   const live = r.quarters.find((q) => q.status === "building");
   const owedRows = r.quarters.filter((q) => (q.status === "missed" || q.status === "locked" || q.status === "building") && q.remainingCents > 0);
   const payBy = live?.due ?? r.next.due;
+  const profileTyped = source === TYPED_SOURCE; // V7: typed totals carry no dates
   const exempt = r.priorYear === "no"; // V1: no estimated payments required, so nothing is "late"
   const anyLate = !exempt && owedRows.some((q) => q.status === "missed");
   const effRate = r.netProfitCents > 0 ? r.fed.totalTaxCents / r.netProfitCents : 0; // one rate, same basis as the breakdown
@@ -374,6 +383,7 @@ function Home({ r, openLine, setWhy, txns, go, source }: { r: NumberResult; open
           <div className="font-display num mt-4 text-5xl font-semibold">{usd(r.owedSoFarCents)}</div>
           <div className="mt-1 text-sm text-zinc-400">{exempt ? "Optional early payment by" : "Next due date"} <b className="text-white">{fmtDate(payBy, true)}</b> · {dueIn(payBy, r.today)}</div>
           <p className="muted mt-2 text-sm">Tax on money you've already earned. New income and costs show up in box 2.</p>
+          {profileTyped && <p className="mb-4 mt-2 text-xs text-zinc-400">Your typed totals have no dates, so there&apos;s no quarter-by-quarter view or late check here. That needs a CSV upload or a bank connection.</p>}
           {owedRows.length > 1 && (
             <ul className="mt-3 divide-y text-sm">
               {owedRows.map((q) => (

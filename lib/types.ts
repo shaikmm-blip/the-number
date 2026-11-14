@@ -33,6 +33,8 @@ export interface Profile {
   asOf: string;
   /** V1: did last year's return show any total tax? "no" = $0 total tax or no return required, a full 12-month year, U.S. citizen or resident all year. Unset = not answered. */
   priorYearTax?: "yes" | "no";
+  /** V7: the data is typed-in totals with no dates, so nothing can be placed in a period or called late. */
+  typedTotals?: boolean;
   balances: AccountBalance[];
   bills: Bill[];
 }

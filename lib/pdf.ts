@@ -5,6 +5,7 @@ import type { NumberResult } from "./number";
 import { ASSUMPTION_LINE, calculationSteps, sourceLink, type SourceKey } from "./steps";
 import { TAX_YEAR } from "./taxConfig";
 import type { Txn } from "./types";
+import { isTypedTotal } from "./entry";
 
 // The PDF's built-in Helvetica has no Unicode minus sign, so amounts use a plain hyphen here.
 export const pdfUSD = (cents: number) => `${cents < 0 ? "-" : ""}$${(Math.abs(cents) / 100).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`;
@@ -120,6 +121,7 @@ function appendItemizedActivity(doc: JsPDF, r: NumberResult, meta: PdfMeta, tran
 
   newPage();
   paragraph("Supporting detail for the estimate on page 1. This is not an invoice or an IRS bill. Positive amounts are money in; negative amounts are money out.");
+  if (inPeriod.some(isTypedTotal)) paragraph("Typed-in rows are totals for the year so far that you entered yourself, not individual transactions. They have no dates, so none is shown.");
   if (inPeriod.some(isQuickBooksMonthlyEntry)) paragraph("QuickBooks rows are monthly Profit & Loss totals, not individual transactions. Their dates are period-end dates, capped at the import date for an unfinished period.");
   paragraph(`This report itemizes ${income.length + costs.length + payments.length + pending.length} rows. Not itemized or counted: ${personal} personal rows, ${transfers} transfers, and ${outside} rows outside the reporting period.`);
   paragraph("Tags follow the app's current classifications and can be wrong. Review deposits are counted as business income; review outflows are not counted. Tax-payment tags are not verified payment receipts. Long descriptions end with ... when shortened.");
@@ -145,12 +147,12 @@ function appendItemizedActivity(doc: JsPDF, r: NumberResult, meta: PdfMeta, tran
       const tag = t.kind === "review"
         ? (t.amountCents > 0 ? "NEEDS REVIEW - counted as income" : "NEEDS REVIEW - not counted")
         : t.kind === "tax_payment" ? "Tagged tax payment - not verified"
-        : isQuickBooksMonthlyEntry(t) ? "Monthly Profit & Loss total" : label(t.category || (t.kind === "business_income" ? "Business income" : "Other"));
+        : isQuickBooksMonthlyEntry(t) ? "Monthly Profit & Loss total" : isTypedTotal(t) ? "Typed-in total, year so far" : label(t.category || (t.kind === "business_income" ? "Business income" : "Other"));
       font(9.5); const desc = doc.splitTextToSize(label(t.description || "(No description)"), DETAIL_WIDTH);
       font(8.5); const detail = doc.splitTextToSize(`${label(t.source)} | ${tag}${t.userSet ? " | User selected" : ""}`, DETAIL_WIDTH);
       const height = desc.length * 12 + detail.length * 11 + 12;
       if (y + height > BOTTOM) { newPage(); heading(`${title} (continued)`, height + 18); columns(); }
-      font(9.5); doc.text(safe(t.date), M, y); doc.text(desc, DETAIL, y);
+      font(9.5); doc.text(isTypedTotal(t) ? "no date" : safe(t.date), M, y); doc.text(desc, DETAIL, y);
       doc.text(pdfUSD(t.amountCents), R, y, { align: "right" }); y += desc.length * 12;
       font(8.5, false, 90); doc.text(detail, DETAIL, y); y += detail.length * 11;
       doc.setDrawColor(235); doc.line(M, y, R, y); y += 12;

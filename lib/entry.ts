@@ -1,4 +1,5 @@
-import type { Kind } from "./types";
+import type { Kind, Txn } from "./types";
+import { toCents } from "./tax";
 
 export interface Entry { amountCents: number; kind: Extract<Kind, "business_income" | "business_expense" | "personal">; description: string; direction: "in" | "out" }
 
@@ -33,4 +34,31 @@ export function parseEntry(text: string): Entry | { error: string } {
     .replace(/[.!]+$/, "").replace(/\s+/g, " ").trim().slice(0, 40) || (direction === "in" ? "customer payment" : "purchase");
   const kind = direction === "in" ? "business_income" : BIZ.test(t) ? "business_expense" : "personal";
   return { amountCents, kind, description: what, direction };
+}
+
+/* ---------- V7: "just type in what I made" ---------- */
+
+export const TYPED_SOURCE = "Typed in by you";
+export const isTypedTotal = (t: Txn) => t.source === TYPED_SOURCE;
+export type TypedTotals = { incomeCents: number; costsCents: number; paidCents: number };
+
+/** A dollar amount typed into a box, as whole cents. Empty is 0 only for optional boxes. */
+export function parseTypedAmount(raw: string, label: string, optional = false): number | { error: string } {
+  const s = raw.trim().replace(/[$,\s]/g, "");
+  const name = label[0].toUpperCase() + label.slice(1);
+  if (!s) return optional ? 0 : { error: `Enter your ${label}, like 18,500 or 18500.00. Enter 0 if there was none.` };
+  if (!/^\d+(\.\d{1,2})?$/.test(s)) return { error: `${name} should be a dollar amount like 18,500 or 18500.00, with no minus sign.` };
+  const cents = toCents(s);
+  if (cents > 1_000_000_000) return { error: `${name} is over $10,000,000. Check the amount.` };
+  return cents;
+}
+
+/** Year-to-date totals as engine rows, dated on the last day they cover. They are totals, not dated transactions. */
+export function typedTotalsTxns(t: TypedTotals, date: string): Txn[] {
+  const base = { date, source: TYPED_SOURCE, reason: "Typed in by you: a total for the year so far, not a dated transaction." };
+  const rows: Txn[] = [];
+  if (t.incomeCents > 0) rows.push({ ...base, id: "typed-income", description: "Income so far this year (typed total)", amountCents: t.incomeCents, kind: "business_income", category: "Typed-in income" });
+  if (t.costsCents > 0) rows.push({ ...base, id: "typed-costs", description: "Business costs so far this year (typed total)", amountCents: -t.costsCents, kind: "business_expense", category: "Typed-in business costs" });
+  if (t.paidCents > 0) rows.push({ ...base, id: "typed-paid", description: "Estimated tax already paid this year (typed total)", amountCents: -t.paidCents, kind: "tax_payment", category: "Tax payment" });
+  return rows;
 }
