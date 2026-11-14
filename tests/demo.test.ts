@@ -113,7 +113,7 @@ describe("V3: what the next $100 of profit adds", () => {
     const r = computeNumber(scaleBusiness(load(), DEMO_FACTOR), DEMO_PROFILE, "2026-11-13");
     const p = r.netProfitCents;
     expect(nextProfitTaxCents(p)).toBe(federalEstimate(p + 10_000).totalTaxCents - federalEstimate(p).totalTaxCents);
-    // the next $100 costs more than the average $100 for the sample (income tax is in the 12% bracket)
+    // the next $100 costs more than the average $100 for the sample (self-employment tax plus the 10% bracket on what's left after half-SE and QBI)
     expect(nextProfitTaxCents(p)).toBeGreaterThan(Math.round((r.fed.totalTaxCents / p) * 10_000));
   });
   it("hand-checked for a $10,000 profit (under the standard deduction): self-employment tax only, $14.12", () => {

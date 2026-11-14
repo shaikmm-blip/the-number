@@ -610,7 +610,7 @@ function Breakdown({ r, source }: { r: NumberResult; source: string }) {
           <div className="h-full rounded-full bg-white transition-all duration-700" style={{ width: `${Math.min(100, per100)}%` }} />
         </div>
         <div className="mt-1.5 flex justify-between text-xs text-zinc-400"><span><span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-white align-middle" />taxes</span><span><span className="mr-1.5 inline-block h-2 w-2 rounded-full border border-white/70 align-middle" />yours to keep</span></div>
-        <p className="mt-3 text-sm" data-next100={next100}>Your next <b>$100</b> of profit adds an estimated <b className="num">{usd(next100)}</b> in tax{f.taxableIncomeCents > 0 && next100 > Math.round(per100 * 100) ? <>, more than the average: your deductions are already used by the profit you&apos;ve made, so new profit is taxed at your top rate</> : null}.</p>
+        <p className="mt-3 text-sm" data-next100={next100}>Your next <b>$100</b> of profit adds an estimated <b className="num">{usd(next100)}</b> in tax{next100 > Math.round(per100 * 100) ? ", more than the average" : ""}.</p>
         <p className="mt-1 text-xs text-zinc-400">Federal tax only. State and city taxes are not included.</p>
       </div>
 
