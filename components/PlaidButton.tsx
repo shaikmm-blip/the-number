@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { usePlaidLink, type PlaidLinkError, type PlaidLinkOnSuccessMetadata } from "react-plaid-link";
-import { finishPlaidLink, retryPlaidSync, type LinkContext, type LinkResult } from "@/lib/plaidLink";
+import { finishPlaidLink, keepWaiting, retryPlaidSync, type LinkContext, type LinkResult } from "@/lib/plaidLink";
 import type { Profile, Txn } from "@/lib/types";
 
 /**
@@ -23,22 +23,23 @@ export function PlaidButton({ onData, sandbox = true, label = "Connect with Plai
   // Set after a connected item had no transactions yet or was still loading: "Check again" reads that same item.
   const [waiting, setWaiting] = useState<LinkContext | null>(null);
 
-  const settle = useCallback((res: LinkResult, ctx: LinkContext) => {
-    if (res.kind === "data") { setWaiting(null); setMsg(""); onData({ txns: res.txns, balances: res.balances, source: res.source }); return; }
-    setWaiting(res.kind === "error" ? null : ctx); setMsg(res.message);
+  const settle = useCallback((res: LinkResult, ctx: LinkContext, fromRetry: boolean) => {
+    setWaiting(keepWaiting(res, ctx, fromRetry));
+    if (res.kind === "data") { setMsg(""); onData({ txns: res.txns, balances: res.balances, source: res.source }); return; }
+    setMsg(res.message);
   }, [onData]);
 
   const onSuccess = useCallback(async (public_token: string, meta: PlaidLinkOnSuccessMetadata) => {
     setToken(null);
     const ctx = { institution: meta.institution?.name || undefined, sandbox };
     setBusy(true); setMsg("Pulling your transactions…");
-    try { settle(await finishPlaidLink(public_token, ctx), ctx); } finally { setBusy(false); }
+    try { settle(await finishPlaidLink(public_token, ctx), ctx, false); } finally { setBusy(false); }
   }, [sandbox, settle]);
 
   async function checkAgain() {
     if (!waiting) return;
     setBusy(true); setMsg("Checking again…");
-    try { settle(await retryPlaidSync(waiting), waiting); } finally { setBusy(false); }
+    try { settle(await retryPlaidSync(waiting), waiting, true); } finally { setBusy(false); }
   }
 
   // Plaid passes an error when Link itself failed; a plain cancel has none and stays silent.

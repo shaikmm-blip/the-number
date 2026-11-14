@@ -224,3 +224,41 @@ describe("Check again: the same connected item, no new Link and no second token 
     expect(res).toEqual({ kind: "error", message: "Connect a bank first." });
   });
 });
+
+describe("Check again survives a passing error on the same item (mocked)", () => {
+  it("pending → retry fails (network, then 502) → context kept → retry completes; one token exchange", async () => {
+    const itemPublicTokenExchange = vi.fn(async () => ({ data: { access_token: "access-sandbox-picked" } }));
+    vi.doMock("@/lib/plaid", async (orig) => ({ ...(await orig<typeof import("@/lib/plaid")>()), plaidClient: () => ({ itemPublicTokenExchange }) }));
+    const txn = { id: "plaid-t1", date: "2026-03-02", source: "Plaid · Plaid Checking", description: "Zelle from customer", amountCents: 25_000, kind: "business_income", reason: "" };
+    const syncAll = vi.fn()
+      .mockResolvedValueOnce({ txns: [txn], balances: [], complete: false }) // exchange: still loading
+      .mockRejectedValueOnce(new Error("Plaid is busy")) // 2nd sync (after a network blip): sync route answers 502
+      .mockResolvedValueOnce({ txns: [txn], balances: [], complete: true }); // 3rd sync: done
+    vi.doMock("@/app/api/plaid/sync/sync", () => ({ syncAll }));
+    const exchange = await import("@/app/api/plaid/exchange/route");
+    const sync = await import("@/app/api/plaid/sync/route");
+    let offline = false;
+    const fetcher = (async (url: string, init?: RequestInit) => {
+      if (offline) throw new Error("offline");
+      return url === "/api/plaid/exchange" ? exchange.POST(new Request(`${ORIGIN}${url}`, init)) : sync.POST();
+    }) as unknown as typeof fetch;
+    const { finishPlaidLink, retryPlaidSync, keepWaiting } = await import("@/lib/plaidLink");
+    const ctx = { institution: "First Platypus Bank", sandbox: true };
+    let r = await finishPlaidLink("public-sandbox-picked", ctx, fetcher);
+    let waiting = keepWaiting(r, ctx, false);
+    expect(r.kind).toBe("pending"); expect(waiting).toEqual(ctx);
+    offline = true; r = await retryPlaidSync(waiting!, fetcher); waiting = keepWaiting(r, waiting!, true);
+    expect(r.kind).toBe("error"); expect(waiting).toEqual(ctx); // a failed retry keeps "Check again" on the same item
+    offline = false; r = await retryPlaidSync(waiting!, fetcher); waiting = keepWaiting(r, waiting!, true);
+    expect(r).toEqual({ kind: "error", message: "Plaid is busy" }); expect(waiting).toEqual(ctx);
+    r = await retryPlaidSync(waiting!, fetcher); waiting = keepWaiting(r, waiting!, true);
+    expect(r.kind).toBe("data"); expect(waiting).toBeNull();
+    expect(itemPublicTokenExchange).toHaveBeenCalledTimes(1);
+    expect(syncAll.mock.calls.every((c) => c[1] === "access-sandbox-picked")).toBe(true);
+  });
+  it("a failed first exchange does not offer Check again (there may be no item): reconnect instead", async () => {
+    const { keepWaiting } = await import("@/lib/plaidLink");
+    expect(keepWaiting({ kind: "error", message: "x" }, { sandbox: true }, false)).toBeNull();
+    expect(keepWaiting({ kind: "empty", message: "x" }, { sandbox: true }, false)).toEqual({ sandbox: true });
+  });
+});

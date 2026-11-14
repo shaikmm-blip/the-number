@@ -35,3 +35,11 @@ export function finishPlaidLink(publicToken: string, ctx: LinkContext, fetcher: 
 export function retryPlaidSync(ctx: LinkContext, fetcher: typeof fetch = fetch): Promise<LinkResult> {
   return interpret(() => fetcher("/api/plaid/sync", { method: "POST" }), ctx, "Couldn't check the bank again. Try again.");
 }
+
+/** What "Check again" should point at after a result: keep the connected item unless the import finished,
+ *  or the very first exchange failed (then there may be no item, so the person reconnects). A failed retry keeps it. */
+export function keepWaiting(res: LinkResult, ctx: LinkContext, fromRetry: boolean): LinkContext | null {
+  if (res.kind === "data") return null;
+  if (res.kind === "error" && !fromRetry) return null;
+  return ctx;
+}
