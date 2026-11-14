@@ -244,3 +244,10 @@ describe("V2 fallback follow-up: Yes qualifies every income-tax surface", () => 
     expect(no.lines.find((l) => l.key === "income")!.why).not.toMatch(/paycheck/);
   });
 });
+describe("V2 fallback follow-up 2: payment alerts carry the wages note", () => {
+  it("missed and open-period alerts say wages aren't included when the answer is Yes", () => {
+    const r = computeNumber(scaleBusiness(load(), DEMO_FACTOR), { ...DEMO_PROFILE, paycheck: "yes" }, "2026-11-13");
+    for (const id of ["missed", "next"]) expect(r.alerts.find((a) => a.id === id)!.body).toMatch(/paycheck wages are not included, so the amount can be higher/);
+    expect(formGuide(r).flatMap((s) => s.rows).find((x) => x.id === "taxable")!.where).toMatch(/can be higher/);
+  });
+});

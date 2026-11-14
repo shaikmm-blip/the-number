@@ -44,7 +44,7 @@ export function formGuide(r: NumberResult): GuideSection[] {
         { id: "half-se", label: "Deduction for half of self-employment tax", cents: f.halfSeDeductionCents, where: "Schedule SE, line 13; it goes on Schedule 1 (Form 1040), line 15", source: "scheduleSE" },
         { id: "std", label: "Standard deduction used in this estimate", cents: Math.min(f.standardDeductionCents, f.agiCents), where: `Form 1040, standard deduction (line number for ${TAX_YEAR} not confirmed yet). The single-filer amount is ${formatUSD(f.standardDeductionCents)}; this estimate uses only up to the income left`, source: "form1040" },
         { id: "qbi", label: "Qualified business income deduction", cents: f.qbiDeductionCents, where: `Form 1040, qualified business income deduction (line number for ${TAX_YEAR} not confirmed yet). This estimate's limit of 20% of taxable income before the QBI deduction is not yet checked against an IRS source`, source: "form1040" },
-        { id: "taxable", label: "Taxable income", cents: f.taxableIncomeCents, where: `Form 1040, taxable income (line number for ${TAX_YEAR} not confirmed yet)${r.paycheck === "yes" ? ". Business only: your paycheck wages are not included, so the real figure is higher" : ""}`, source: "form1040" },
+        { id: "taxable", label: "Taxable income", cents: f.taxableIncomeCents, where: `Form 1040, taxable income (line number for ${TAX_YEAR} not confirmed yet)${r.paycheck === "yes" ? ". Business only: your paycheck wages are not included, so the real figure can be higher" : ""}`, source: "form1040" },
         { id: "paid", label: "Estimated payments made", cents: r.taxPaidCents, where: `Form 1040, estimated tax payments (line number for ${TAX_YEAR} not confirmed yet)`, source: "form1040" },
       ],
     },
