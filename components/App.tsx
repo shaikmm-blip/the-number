@@ -790,7 +790,7 @@ const FB = "https://www.globenewswire.com/news-release/2025/03/19/3045674/0/en/H
 const STATS: { big: string; what: string; means: (r: NumberResult) => string; src: string; url: string }[] = [
   { big: "1 in 3", what: "didn't know whether they had to pay the IRS every quarter.", means: (r) => `Your estimated tax so far is ${formatUSD(r.owedSoFarCents)}; the next due date is ${r.next.due}.`, src: "American University Kogod, Small Business Tax Literacy Survey", url: AU },
   { big: "37%", what: "say filing taxes leaves them anxious and confused.", means: () => "That's why every line of your Number has a plain-English 'why'.", src: "American University Kogod, Small Business Tax Literacy Survey", url: AU },
-  { big: "26%", what: "of small business owners and freelancers feel completely confident about their taxes.", means: () => "Confidence comes from knowing the number before April, not after.", src: "FreshBooks 2025 Tax Trends Report (about 1,300 surveyed)", url: FB },
+  { big: "74%", what: "of small business owners and freelancers aren't fully confident about their taxes.", means: () => "Confidence starts with knowing your number before April, not after.", src: "FreshBooks 2025 Tax Trends Report (about 1,300 surveyed; 26% said completely confident)", url: FB },
   { big: "35%", what: "say organizing receipts is their biggest tax headache.", means: (r) => `We sorted ${formatUSD(r.expensesCents)} of your business costs automatically.`, src: "FreshBooks 2025 Tax Trends Report", url: FB },
 ];
 
