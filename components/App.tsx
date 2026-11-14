@@ -11,7 +11,7 @@ import { federalEstimate, formatUSD } from "@/lib/tax";
 import { randomFactor, scaleBusiness } from "@/lib/scale";
 import { ASSUMPTIONS, SOURCES, SOURCE_TITLES, TAX_2026, TAX_YEAR } from "@/lib/taxConfig";
 import { ASSUMPTION_LINE, calculationSteps } from "@/lib/steps";
-import { buildEstimatePdf } from "@/lib/pdf";
+import { buildEstimatePdf, isQuickBooksMonthlyEntry } from "@/lib/pdf";
 import { formGuide, GUIDE_CHECKED, GUIDE_SOURCES } from "@/lib/guide";
 import type { Profile, Txn } from "@/lib/types";
 import { Connect, Landing, Logo, Pricing, SignUp, ThemeToggle, type Account } from "./Onboarding";
@@ -220,7 +220,7 @@ export default function App() {
         {tab === "alerts" && <Alerts r={result} go={setTab} prefs={prefs} setPref={setPref} />}
         {tab === "settle" && <Settle r={result} />}
         {tab === "learn" && <Learn r={result} />}
-        {tab === "profile" && <Profile r={result} account={account} source={source} plan={PLAN_NAME[account?.plan || "free"]} onReconnect={() => go("connect")} onEditInfo={() => go("signup")} onChangePlan={() => go("pricing")} onSignOut={signOut} />}
+        {tab === "profile" && <Profile r={result} txns={txns} account={account} source={source} plan={PLAN_NAME[account?.plan || "free"]} onReconnect={() => go("connect")} onEditInfo={() => go("signup")} onChangePlan={() => go("pricing")} onSignOut={signOut} />}
         <p className="muted pb-4 pt-2 text-center text-xs">Data: {source}. Educational estimate, not tax advice.</p>
       </main>
 
@@ -522,13 +522,22 @@ function PayAssist({ r, amountFmt, year, onClose }: { r: NumberResult; amountFmt
 
 /* ---------- Profile / settings ---------- */
 
-function Profile({ r, account, source, plan, onReconnect, onEditInfo, onChangePlan, onSignOut }: { r: NumberResult; account: Account | null; source: string; plan: string; onReconnect: () => void; onEditInfo: () => void; onChangePlan: () => void; onSignOut: () => void }) {
+function Profile({ r, txns, account, source, plan, onReconnect, onEditInfo, onChangePlan, onSignOut }: { r: NumberResult; txns: Txn[]; account: Account | null; source: string; plan: string; onReconnect: () => void; onEditInfo: () => void; onChangePlan: () => void; onSignOut: () => void }) {
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
+  const hasMonthlyTotals = txns.some(isQuickBooksMonthlyEntry);
   async function exportPdf() {
-    // Same steps as the on-screen calculation (lib/steps.ts), so the handoff and the screen cannot disagree.
-    const { jsPDF } = await import("jspdf");
-    const due = r.quarters?.find((q) => q.status === "building")?.due ?? r.next.due;
-    const nextDue = new Date(due + "T12:00:00Z").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
-    buildEstimatePdf(new jsPDF({ unit: "pt", format: "letter" }), r, { name: account?.name, business: account?.business, source, generated: new Date(), nextDue }).save("the-number-estimate-summary.pdf");
+    if (exporting) return;
+    setExporting(true); setExportError("");
+    try {
+      // Same steps as the on-screen calculation (lib/steps.ts), so the handoff and the screen cannot disagree.
+      const { jsPDF } = await import("jspdf");
+      const due = r.quarters?.find((q) => q.status === "building")?.due ?? r.next.due;
+      const nextDue = new Date(due + "T12:00:00Z").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+      buildEstimatePdf(new jsPDF({ unit: "pt", format: "letter" }), r, { name: account?.name, business: account?.business, source, generated: new Date(), nextDue }, txns).save("the-number-itemized-estimate.pdf");
+    } catch {
+      setExportError("The PDF could not be created. Please try exporting again.");
+    } finally { setExporting(false); }
   }
   const rows: [string, string][] = [
     ["Name", account?.name || "You"],
@@ -551,8 +560,10 @@ function Profile({ r, account, source, plan, onReconnect, onEditInfo, onChangePl
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <button className="btn btn-ghost" onClick={onEditInfo}>Edit my info</button>
           <button className="btn btn-ghost" onClick={onChangePlan}>Change plan</button>
-          <button className="btn btn-ghost !px-3 text-xs text-zinc-400" onClick={exportPdf} title="Download a PDF of your number"><Download size={14} />Export PDF</button>
+          <button className="btn btn-ghost !px-3 text-xs text-zinc-400" onClick={exportPdf} disabled={exporting} aria-busy={exporting} title={hasMonthlyTotals ? "Download your estimate with monthly QuickBooks income and cost totals" : "Download your estimate with itemized income, costs and payments"}><Download size={14} />{exporting ? "Creating PDF..." : "Export PDF"}</button>
         </div>
+        <p className="mt-3 text-xs text-zinc-400">{hasMonthlyTotals ? "Includes the tax summary and monthly QuickBooks income and cost totals." : "Includes the tax summary, expense categories and itemized transactions."}</p>
+        {exportError && <p className="mt-2 text-sm" role="alert">{exportError}</p>}
       </div>
 
       <div className="card p-6">

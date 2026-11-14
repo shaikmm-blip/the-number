@@ -6,8 +6,10 @@ import { normalize } from "../lib/csv";
 import { DEMO_PROFILE } from "../lib/demo";
 import { computeNumber } from "../lib/number";
 import { buildEstimatePdf, pdfUSD } from "../lib/pdf";
+import { plToTxns } from "../lib/qbo";
 import { DEMO_FACTOR, scaleBusiness } from "../lib/scale";
 import { calculationSteps } from "../lib/steps";
+import type { Txn } from "../lib/types";
 
 const sample = () => ["chase", "cashapp", "venmo"].flatMap((f) => normalize(readFileSync(`public/demo/${f}.csv`, "utf8"), `${f}.csv`)).map(classify);
 // Pull the text the PDF actually draws: every (string) Tj operator in the uncompressed file.
@@ -58,5 +60,102 @@ describe("CPA estimate summary PDF", () => {
     expect(text).not.toMatch(/CPA[- ](reviewed|approved|verified)|IRS[- ]approved|AI can/i);
     expect(text).toMatch(/Not reviewed by a CPA or the IRS/);
     expect(text).not.toMatch(/CHIPOTLE|TACO BELL|driveway wash/i);
+  });
+});
+
+describe("itemized estimate export", () => {
+  const txn = (id: string, kind: Txn["kind"], amountCents: number, extra: Partial<Txn> = {}): Txn => ({
+    id, kind, amountCents, date: "2026-02-01", description: id, source: "Fictional CSV", reason: "Test fixture", ...extra,
+  });
+  const entries = [
+    txn("Job A", "business_income", 3_000_000),
+    txn("Income reversal", "business_income", -10_000),
+    txn("Unconfirmed deposit", "review", 10_000),
+    txn("Supplies purchase", "business_expense", -150_000, { category: "Supplies" }),
+    txn("Supplies refund", "business_expense", 5_000, { category: "Supplies" }),
+    txn("Tagged tax debit", "tax_payment", -90_000),
+    txn("Tagged tax reversal", "tax_payment", 2_500),
+    txn("Unconfirmed outflow", "review", -5_000),
+    txn("Personal excluded", "personal", -6_000),
+    txn("Transfer excluded", "transfer", 9_000),
+    txn("Prior year excluded", "business_income", 20_000, { date: "2025-12-01" }),
+    txn("Future excluded", "business_income", 80_000, { date: "2026-12-01" }),
+  ];
+  const meta = { source: "Fictional CSV", generated: new Date("2026-11-13T12:00:00") };
+  const result = computeNumber(entries, DEMO_PROFILE);
+  const report = () => buildEstimatePdf(new jsPDF({ unit: "pt", format: "letter" }), result, meta, entries);
+
+  it("itemizes the same dated inputs and signed reversals that feed the estimate", () => {
+    const text = pdfText(report());
+    for (const entry of entries.slice(0, 8)) expect(text).toContain(`${entry.description}\n${pdfUSD(entry.amountCents)}`);
+    for (const entry of entries.slice(8)) expect(text).not.toContain(entry.description);
+    expect(text).toContain("1 personal rows, 1 transfers, and 2");
+    expect(text).toContain(`Total income counted\n${pdfUSD(result.incomeCents)}`);
+    expect(text).toContain(`Total cost entries (money out)\n${pdfUSD(-result.expensesCents)}`);
+    expect(text).toContain(`Net payment entries (money out)\n${pdfUSD(-result.taxPaidCents)}`);
+    expect(result.incomeCents).toBe(3_000_000);
+    expect(result.expensesCents).toBe(145_000);
+    expect(result.taxPaidCents).toBe(87_500);
+    expect(text).toContain(pdfUSD(result.owedSoFarCents));
+  });
+
+  it("includes expense-category subtotals and flags provisional classifications", () => {
+    const text = pdfText(report());
+    expect(text).toContain("Supplies\n$1,450.00");
+    expect(text).toContain("NEEDS REVIEW - counted as income");
+    expect(text).toContain("NEEDS REVIEW - not counted");
+    expect(text).toContain("Tagged tax payment - not verified");
+    expect(text).toContain("not an invoice or an IRS bill");
+  });
+
+  it("handles an empty account without inventing transactions", () => {
+    const empty = computeNumber([], DEMO_PROFILE);
+    const doc = buildEstimatePdf(new jsPDF({ unit: "pt", format: "letter" }), empty, meta, []);
+    const text = pdfText(doc);
+    expect(text).toContain("itemizes 0 rows");
+    expect(text).toContain("No business costs are counted in this period.");
+    expect(text).toContain("Income counted (0)");
+    expect(text).not.toContain("Payments counted (0)");
+    expect(text).not.toContain("Other rows needing review (0)");
+    expect(text).toContain("$0.00");
+  });
+
+  it("identifies QuickBooks monthly aggregates and their reporting dates without inventing transaction detail", () => {
+    const monthly = plToTxns({
+      Columns: { Column: [{ ColTitle: "" },
+        { ColTitle: "Jan 2026", MetaData: [{ Name: "EndDate", Value: "2026-01-31" }] },
+        { ColTitle: "Nov 2026", MetaData: [{ Name: "EndDate", Value: "2026-11-30" }] }] },
+      Rows: { Row: [
+        { group: "Income", Summary: { ColData: [{ value: "Income" }, { value: "2000" }, { value: "1000" }] } },
+        { group: "Expenses", Summary: { ColData: [{ value: "Costs" }, { value: "300" }, { value: "150" }] } },
+      ] },
+    }, DEMO_PROFILE.asOf);
+    const r = computeNumber(monthly, DEMO_PROFILE);
+    const text = pdfText(buildEstimatePdf(new jsPDF({ unit: "pt", format: "letter" }), r, { ...meta, source: "QuickBooks (sandbox company), Profit & Loss" }, monthly));
+    expect(text.replace(/\n/g, " ")).toContain("monthly Profit & Loss totals, not individual transactions");
+    expect(text.replace(/\n/g, " ")).toContain("period-end dates, capped at the import date");
+    expect(text.match(/Monthly Profit & Loss total/g)).toHaveLength(4);
+    expect(monthly.map(t => t.date)).toEqual(["2026-01-31", "2026-01-31", DEMO_PROFILE.asOf, DEMO_PROFILE.asOf]);
+    for (const t of monthly) expect(text).toContain(`${t.date}\n${t.description}\n${pdfUSD(t.amountCents)}`);
+    expect(text).toContain("Total income counted\n$3,000.00");
+    expect(text).toContain("Total cost entries (money out)\n-$450.00");
+    expect(text).toContain(pdfUSD(r.owedSoFarCents));
+    expect(pdfText(report())).not.toContain("QuickBooks rows are monthly");
+  });
+
+  it("paginates long descriptions, repeats column headers, and keeps every row and footer", () => {
+    const long = Array.from({ length: 90 }, (_, i) => txn(`item-${i}`, "business_expense", -100 - i, {
+      description: `ROW${String(i).padStart(3, "0")} ${"very long description ".repeat(30)}`,
+      category: "Long category ".repeat(20), source: "Long source ".repeat(20),
+    }));
+    const original = long.map(t => ({ ...t }));
+    const doc = buildEstimatePdf(new jsPDF({ unit: "pt", format: "letter" }), computeNumber(long, DEMO_PROFILE), meta, long);
+    const text = pdfText(doc);
+    expect(doc.getNumberOfPages()).toBeGreaterThan(4);
+    for (let i = 0; i < 90; i++) expect(text.match(new RegExp(`ROW${String(i).padStart(3, "0")}`, "g"))).toHaveLength(1);
+    expect(text.match(/DESCRIPTION \/ SOURCE \/ TAG/g)!.length).toBeGreaterThan(1);
+    for (let i = 1; i <= doc.getNumberOfPages(); i++) expect(text).toContain(`Page ${i} of ${doc.getNumberOfPages()}`);
+    expect(text).toContain("...");
+    expect(long).toEqual(original);
   });
 });
