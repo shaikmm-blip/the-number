@@ -20,8 +20,11 @@ export function periodLeft(endIso: string, today: string) {
 }
 
 /** V3: estimated extra federal tax on the next `stepCents` of profit. No new formula: the engine run twice, then the difference. */
-export const nextProfitTaxCents = (netProfitCents: number, stepCents = 10_000) =>
-  federalEstimate(netProfitCents + stepCents).totalTaxCents - federalEstimate(netProfitCents).totalTaxCents;
+export const nextProfitTaxCents = (netProfitCents: number, stepCents = 10_000, wagesCents = 0) =>
+  federalEstimate(netProfitCents + stepCents, TAX_2026, wagesCents).totalTaxCents - federalEstimate(netProfitCents, TAX_2026, wagesCents).totalTaxCents;
+
+/** V2: the engine models a paycheck plus a sole proprietorship only up to this combined income (extra limits and the 0.9% Additional Medicare Tax start near $200,000 for single filers). */
+export const COMBINED_LIMIT_CENTS = 20_000_000;
 
 export interface Line { key: string; label: string; amountCents: number; why: string; txnIds?: string[] }
 export interface Alert { id: string; level: "critical" | "warning" | "info"; title: string; body: string }
@@ -37,7 +40,7 @@ export interface Quarter {
 
 const PERIOD_ENDS = ["03-31", "05-31", "08-31", "12-31"];
 
-export function quarterBreakdown(txns: Txn[], asOf: string, paidCents: number): Quarter[] {
+export function quarterBreakdown(txns: Txn[], asOf: string, paidCents: number, wagesCents = 0): Quarter[] {
   const year = String(TAX_YEAR);
   const inYear = txns.filter((t) => t.date.startsWith(year) && t.date <= asOf);
   const profitThrough = (end: string) => inYear.filter((t) => t.date <= end).reduce((s, t) => {
@@ -50,7 +53,7 @@ export function quarterBreakdown(txns: Txn[], asOf: string, paidCents: number): 
     const end = `${year}-${PERIOD_ENDS[i]}`;
     const start = i === 0 ? `${year}-01-01` : (() => { const d = new Date(Date.parse(prevEnd + "T00:00:00Z") + 86_400_000); return d.toISOString().slice(0, 10); })();
     const started = start <= asOf;
-    const cumTax = started ? federalEstimate(profitThrough(end < asOf ? end : asOf)).totalTaxCents : prevTax;
+    const cumTax = started ? federalEstimate(profitThrough(end < asOf ? end : asOf), TAX_2026, wagesCents).totalTaxCents : prevTax;
     const amount = Math.max(0, cumTax - prevTax);
     prevTax = Math.max(prevTax, cumTax); prevEnd = end;
     const covered = Math.min(left, amount); left -= covered;
@@ -86,6 +89,9 @@ export interface NumberResult {
   topCategories: { category: string; amountCents: number }[];
   alerts: Alert[];
   quarters: Quarter[];
+  /** V2: expected paycheck wages used (0 = none), and why the estimate is declined, if it is. */
+  wagesCents: number;
+  unsupported?: string;
   /** V1: the answer to "did you have total tax last year?" */
   priorYear: "yes" | "no" | "unknown";
   /** V4: estimated late-payment penalty on the late, unpaid periods (Form 2210 method). */
@@ -101,7 +107,10 @@ export function computeNumber(txns: Txn[], profile: Profile, today = profile.asO
   const income = incomeTx.reduce((s, t) => s + t.amountCents, 0);
   const expenses = expenseTx.reduce((s, t) => s - t.amountCents, 0);
   const net = income - expenses;
-  const fed = federalEstimate(net);
+  const wages = Math.max(0, profile.wagesCents ?? 0); // V2
+  const fed = federalEstimate(net, TAX_2026, wages);
+  const unsupported = wages > 0 && wages + Math.max(0, net) > COMBINED_LIMIT_CENTS
+    ? `Not supported yet: The Number doesn't estimate tax when paycheck wages plus business profit are over ${formatUSD(COMBINED_LIMIT_CENTS)}. Extra rules start around there, so any figure here would be too low.` : undefined;
   const paid = taxTx.reduce((s, t) => s - t.amountCents, 0);
   const owed = Math.max(0, fed.totalTaxCents - paid);
 
@@ -131,7 +140,9 @@ export function computeNumber(txns: Txn[], profile: Profile, today = profile.asO
   const seWhy = fed.se.belowThreshold
     ? `Good news — you've made under $400 in profit, so this estimate has no self-employment tax yet.`
     : `This is the big one nobody warns you about. At a regular job, your boss quietly covers half of your Social Security and Medicare. Working for yourself, you pay both halves — a little over 14 cents on every dollar of profit. On your ${formatUSD(net)} profit, that's ${formatUSD(fed.se.totalCents)}. It kicks in once you make $400, at any age.`;
-  const itWhy = fed.taxableIncomeCents === 0
+  const itWhy = wages > 0
+    ? `This is the extra income tax your business adds. Your paycheck wages use up the ${formatUSD(fed.standardDeductionCents)} standard deduction and the lowest brackets first, so business profit is taxed on top of them: ${formatUSD(fed.incomeTaxAllCents)} on wages and business together, minus ${formatUSD(fed.wagesOnlyIncomeTaxCents)} on the wages alone, is ${formatUSD(fed.incomeTaxCents)}. This assumes your paycheck withholding covers the tax on your wages.`
+    : fed.taxableIncomeCents === 0
     ? `Your write-offs cover all of your profit, so there's no income tax to pay here.`
     : `This is regular income tax — but you don't pay it on everything. Normal write-offs (a ${formatUSD(fed.standardDeductionCents)} standard deduction everyone gets${fed.qbiDeductionCents ? `, plus a 20% small-business discount` : ""}) bring your profit down to about ${formatUSD(fed.taxableIncomeCents)}. Only that part gets taxed, starting at just 10%. That comes to ${formatUSD(fed.incomeTaxCents)}.`;
 
@@ -153,7 +164,7 @@ export function computeNumber(txns: Txn[], profile: Profile, today = profile.asO
   for (const t of expenseTx) catMap.set(t.category || "Other", (catMap.get(t.category || "Other") || 0) - t.amountCents);
   const topCategories = [...catMap.entries()].map(([category, amountCents]) => ({ category, amountCents })).sort((a, b) => b.amountCents - a.amountCents);
 
-  const quarters = quarterBreakdown(txns, asOf, paid);
+  const quarters = quarterBreakdown(txns, asOf, paid, wages);
   const missedQ = quarters.filter((q) => q.status === "missed" && q.remainingCents > 0);
   const building = quarters.find((q) => q.status === "building");
   // V4: dated payments (the tax-payment rows' own dates) go to the earliest unpaid period. Typed totals have no dates, so no penalty (V7).
@@ -175,6 +186,6 @@ export function computeNumber(txns: Txn[], profile: Profile, today = profile.asO
     taxPaidCents: paid, owedSoFarCents: owed, cushionCents: cushion, billsCents: bills, theNumberCents: theNumber,
     balanceCents: balance, safeToSpendCents: safe, saveThisMonthCents: saveThisMonth,
     next: { quarter: upcoming.quarter, due: upcoming.due, daysLeft, amountCents: owed }, missed,
-    lines, monthly, topCategories, alerts, quarters, penalty, priorYear,
+    lines, monthly, topCategories, alerts, quarters, penalty, priorYear, wagesCents: wages, unsupported,
   };
 }

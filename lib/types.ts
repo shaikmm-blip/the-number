@@ -35,6 +35,8 @@ export interface Profile {
   priorYearTax?: "yes" | "no";
   /** V7: the data is typed-in totals with no dates, so nothing can be placed in a period or called late. */
   typedTotals?: boolean;
+  /** V2: this year's expected paycheck (W-2) wages before tax, in cents. Unset or 0 = no paycheck job. */
+  wagesCents?: number;
   balances: AccountBalance[];
   bills: Bill[];
 }

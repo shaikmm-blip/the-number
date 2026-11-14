@@ -115,3 +115,57 @@ describe("estimated-tax penalty with dated payments (applied to the earliest unp
     expect(penaltySummary(q, [], "2026-12-20").assumedRate).toBeUndefined();
   });
 });
+
+describe("V2: paycheck wages come first; the business stacks on top (sample profit $30,462.40)", () => {
+  const P = 3_046_240;
+  it("zero wages reproduces the existing estimate to the cent", () => {
+    const a = federalEstimate(P), b = federalEstimate(P, undefined, 0);
+    expect(b).toEqual(a);
+    expect(b.totalTaxCents).toBe(528_102);
+    expect(b.wagesOnlyIncomeTaxCents).toBe(0);
+  });
+  it("hand-checked: $30,000 of wages -> business income tax $2,717.79, total $7,021.99", () => {
+    // SE unchanged (wages + earnings under $184,500): 4,304.20; half 2,152.10
+    // AGI = 30,000 + (30,462.40 - 2,152.10) = 58,310.30; minus $16,100 = 42,210.30
+    // QBI = min(20% x 28,310.30 = 5,662.06, 20% x 42,210.30 = 8,442.06) = 5,662.06; taxable 36,548.24
+    // tax on all: 10% x 12,400 = 1,240 + 12% x 24,148.24 = 2,897.79 -> 4,137.79
+    // tax on wages alone: 30,000 - 16,100 = 13,900 -> 1,240 + 12% x 1,500 = 180 -> 1,420.00
+    // business share 4,137.79 - 1,420.00 = 2,717.79; total 4,304.20 + 2,717.79 = 7,021.99
+    const r = federalEstimate(P, undefined, 3_000_000);
+    expect(r.se.totalCents).toBe(430_420);
+    expect(r.agiCents).toBe(5_831_030);
+    expect(r.qbiDeductionCents).toBe(566_206);
+    expect(r.taxableIncomeCents).toBe(3_654_824);
+    expect(r.incomeTaxAllCents).toBe(413_779);
+    expect(r.wagesOnlyIncomeTaxCents).toBe(142_000);
+    expect(r.incomeTaxCents).toBe(271_779);
+    expect(r.totalTaxCents).toBe(702_199);
+  });
+  it("hand-checked: $60,000 of wages -> business income tax $4,332.61", () => {
+    // AGI 88,310.30; before QBI 72,210.30; QBI 5,662.06 (20% of business); taxable 66,548.24
+    // tax on all: 1,240 + 12% x 38,000 = 4,560 + 22% x 16,148.24 = 3,552.61 -> 9,352.61
+    // wages alone: 43,900 taxable -> 1,240 + 12% x 31,500 = 3,780 -> 5,020.00; business 4,332.61
+    const r = federalEstimate(P, undefined, 6_000_000);
+    expect(r.taxableIncomeCents).toBe(6_654_824);
+    expect(r.incomeTaxAllCents).toBe(935_261);
+    expect(r.wagesOnlyIncomeTaxCents).toBe(502_000);
+    expect(r.incomeTaxCents).toBe(433_261);
+    expect(r.totalTaxCents).toBe(430_420 + 433_261);
+  });
+  it("hand-checked: $160,000 of wages -> Social Security part stops at $184,500 - wages: $3,038.00", () => {
+    // SE earnings 28,132.03; SS on min(28,132.03, 184,500 - 160,000 = 24,500) x 12.4% = 3,038.00; Medicare 2.9% x 28,132.03 = 815.83
+    // half SE 3,853.83 / 2 = 1,926.915 -> 1,926.92; business share of income tax 5,478.81 (independent model)
+    const r = federalEstimate(P, undefined, 16_000_000);
+    expect(r.se.socialSecurityCents).toBe(303_800);
+    expect(r.se.medicareCents).toBe(81_583);
+    expect(r.halfSeDeductionCents).toBe(192_692);
+    expect(r.incomeTaxCents).toBe(547_881);
+    expect(r.totalTaxCents).toBe(933_264);
+  });
+  it("wages at or above the wage base leave no Social Security part; a loss is not used against wages", () => {
+    expect(federalEstimate(P, undefined, 18_450_000).se.socialSecurityCents).toBe(0);
+    const loss = federalEstimate(-500_000, undefined, 3_000_000);
+    expect(loss.incomeTaxCents).toBe(0);
+    expect(loss.totalTaxCents).toBe(0);
+  });
+});

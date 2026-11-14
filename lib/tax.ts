@@ -11,12 +11,13 @@ export interface SETax {
   belowThreshold: boolean;
 }
 
-export function selfEmploymentTax(netProfitCents: number, cfg = TAX_2026): SETax {
+// V2: wages already taxed for Social Security use up part of the wage base (Schedule SE 2026, lines 7-10).
+export function selfEmploymentTax(netProfitCents: number, cfg = TAX_2026, wagesCents = 0): SETax {
   const netEarnings = Math.max(0, pct(netProfitCents, cfg.seEarningsFactorBps));
   if (netEarnings < cfg.seThresholdCents) {
     return { netEarningsCents: netEarnings, socialSecurityCents: 0, medicareCents: 0, totalCents: 0, belowThreshold: true };
   }
-  const ss = pct(Math.min(netEarnings, cfg.ssWageBaseCents), cfg.socialSecurityBps);
+  const ss = pct(Math.min(netEarnings, Math.max(0, cfg.ssWageBaseCents - Math.max(0, wagesCents))), cfg.socialSecurityBps);
   const medicare = pct(netEarnings, cfg.medicareBps);
   return { netEarningsCents: netEarnings, socialSecurityCents: ss, medicareCents: medicare, totalCents: ss + medicare, belowThreshold: false };
 }
@@ -41,37 +42,54 @@ export function bracketTax(taxableCents: number, cfg = TAX_2026) {
 
 export interface FederalEstimate {
   netProfitCents: number;
+  /** V2: this year's expected paycheck wages (0 when none). */
+  wagesCents: number;
   se: SETax;
   halfSeDeductionCents: number;
   agiCents: number;
   standardDeductionCents: number;
   qbiDeductionCents: number;
+  /** Taxable income, wages included. */
   taxableIncomeCents: number;
+  /** The business's share of income tax: tax on everything minus tax on wages alone (equals all income tax when there are no wages). */
   incomeTaxCents: number;
+  /** Bracket lines for all taxable income, wages included. */
   incomeTaxLines: { rateBps: number; amountCents: number; taxCents: number }[];
+  /** V2: income tax on all taxable income, and on the wages alone. */
+  incomeTaxAllCents: number;
+  wagesOnlyIncomeTaxCents: number;
   totalTaxCents: number;
 }
 
-export function federalEstimate(netProfitCents: number, cfg = TAX_2026): FederalEstimate {
-  const se = selfEmploymentTax(netProfitCents, cfg);
+// V2: with paycheck wages, wages fill the standard deduction and the lower brackets first and the business stacks on top.
+// The business's income tax is the tax on everything minus the tax on the wages alone (assumes withholding covers the wages).
+// A business loss is not used against wages (the estimate's existing convention). With wages = 0 every figure is unchanged.
+export function federalEstimate(netProfitCents: number, cfg = TAX_2026, wagesCents = 0): FederalEstimate {
+  const wages = Math.max(0, wagesCents);
+  const se = selfEmploymentTax(netProfitCents, cfg, wages);
   const halfSe = Math.round(se.totalCents / 2);
-  const agi = Math.max(0, netProfitCents - halfSe);
+  const agi = wages + Math.max(0, netProfitCents - halfSe);
   const beforeQbi = Math.max(0, agi - cfg.standardDeductionCents);
-  // Sole-proprietor QBI deduction: 20% of (profit - half SE tax), but no more than 20% of taxable income before it.
+  // Sole-proprietor QBI deduction: 20% of (profit - half SE tax), but no more than 20% of taxable income before it (wages included).
   const qbi = Math.min(pct(Math.max(0, netProfitCents - halfSe), cfg.qbiBps), pct(beforeQbi, cfg.qbiBps));
   const taxable = Math.max(0, beforeQbi - qbi);
   const it = bracketTax(taxable, cfg);
+  const wagesOnly = bracketTax(Math.max(0, wages - cfg.standardDeductionCents), cfg).totalCents;
+  const business = Math.max(0, it.totalCents - wagesOnly);
   return {
     netProfitCents,
+    wagesCents: wages,
     se,
     halfSeDeductionCents: halfSe,
     agiCents: agi,
     standardDeductionCents: cfg.standardDeductionCents,
     qbiDeductionCents: qbi,
     taxableIncomeCents: taxable,
-    incomeTaxCents: it.totalCents,
+    incomeTaxCents: business,
     incomeTaxLines: it.lines,
-    totalTaxCents: se.totalCents + it.totalCents,
+    incomeTaxAllCents: it.totalCents,
+    wagesOnlyIncomeTaxCents: wagesOnly,
+    totalTaxCents: se.totalCents + business,
   };
 }
 

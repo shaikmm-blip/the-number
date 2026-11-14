@@ -46,7 +46,7 @@ describe("1040 / 1040-ES guide", () => {
     expect(row(fl, "std").cents).toBe(0); expect(row(fl, "std").label).toMatch(/used in this estimate/); expect(row(fl, "std").where).toMatch(/\$16,100/);
     expect(row(fl, "paid").cents).toBe(loss.taxPaidCents); expect(row(fl, "paid").cents).toBe(20_000);
     expect(row(d, "pay").cents).toBe(loss.owedSoFarCents);
-    expect(row(fl, "qbi").where).toMatch(/not yet checked/);
+    expect(row(fl, "qbi").where).toContain("Limited to 20% of taxable income before the QBI deduction (Form 8995 instructions)");
   });
   it("only names line numbers that were confirmed for 2026 (Schedule C and Schedule SE); Form 1040 lines are named by concept", () => {
     for (const row of filing.rows.filter((x) => x.source === "form1040")) expect(row.where).toMatch(/line number for 2026 not confirmed yet/);

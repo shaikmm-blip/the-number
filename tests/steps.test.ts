@@ -55,3 +55,28 @@ describe("full calculation steps", () => {
     }
   });
 });
+
+describe("V2: steps with paycheck wages reconcile to the headline", () => {
+  function reconcilesWithWages(r: NumberResult) {
+    const all = calculationSteps(r).flatMap((g) => g.steps);
+    expect(amt(r, "ss") + amt(r, "medicare")).toBe(amt(r, "se-total"));
+    expect(amt(r, "profit") + amt(r, "wages") + amt(r, "half-se") + amt(r, "loss")).toBe(amt(r, "agi"));
+    expect(amt(r, "agi") + amt(r, "std") + amt(r, "qbi")).toBe(amt(r, "taxable"));
+    expect(all.filter((s) => s.id.startsWith("bracket-")).reduce((t, s) => t + s.amountCents, 0)).toBe(amt(r, "it-all"));
+    expect(amt(r, "it-all") + amt(r, "it-wages")).toBe(amt(r, "it-total"));
+    expect(amt(r, "se-again") + amt(r, "it-again") + amt(r, "paid") + amt(r, "overpaid")).toBe(amt(r, "owed"));
+    expect(amt(r, "owed")).toBe(r.owedSoFarCents);
+  }
+  for (const w of [3_000_000, 6_000_000, 16_000_000]) {
+    it(`sample + $${w / 100} of wages`, () => {
+      const r = computeNumber(scaleBusiness(sample(), DEMO_FACTOR), { ...DEMO_PROFILE, wagesCents: w });
+      reconcilesWithWages(r);
+      expect(r.unsupported).toBeUndefined();
+    });
+  }
+  it("declines combined income over $200,000 instead of showing a low number", () => {
+    const r = computeNumber(scaleBusiness(sample(), DEMO_FACTOR), { ...DEMO_PROFILE, wagesCents: 17_000_000 });
+    expect(r.unsupported).toMatch(/^Not supported yet/);
+    expect(computeNumber(scaleBusiness(sample(), DEMO_FACTOR), { ...DEMO_PROFILE, wagesCents: 16_000_000 }).unsupported).toBeUndefined();
+  });
+});

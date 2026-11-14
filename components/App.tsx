@@ -10,12 +10,12 @@ import { computeNumber, dueIn, localToday, nextProfitTaxCents, periodLeft, type 
 import { federalEstimate, formatUSD } from "@/lib/tax";
 import { randomFactor, scaleBusiness } from "@/lib/scale";
 import { ASSUMPTIONS, SOURCES, SOURCE_TITLES, TAX_2026, TAX_YEAR } from "@/lib/taxConfig";
-import { ASSUMPTION_LINE, calculationSteps } from "@/lib/steps";
+import { assumptionLine, calculationSteps } from "@/lib/steps";
 import { buildEstimatePdf, isQuickBooksMonthlyEntry } from "@/lib/pdf";
 import { CURRENT_RATE_PCT, PENALTY_SOURCES } from "@/lib/penalty";
 import { formGuide, GUIDE_CHECKED, GUIDE_SOURCES } from "@/lib/guide";
 import type { Profile, Txn } from "@/lib/types";
-import { TYPED_SOURCE, typedTotalsTxns, type TypedTotals } from "@/lib/entry";
+import { TYPED_SOURCE, parseTypedAmount, typedTotalsTxns, type TypedTotals } from "@/lib/entry";
 import { Connect, Landing, Logo, Pricing, SignUp, ThemeToggle, type Account } from "./Onboarding";
 
 type Tab = "home" | "alerts" | "learn" | "settle" | "profile";
@@ -44,11 +44,14 @@ export default function App() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<string>("");
   const [loadFail, setLoadFail] = useState(false);
-  const [draft, setDraft] = useState<{ name: string; email: string; business: string; prior: "" | "yes" | "no" }>({ name: "", email: "", business: "Pressure washing", prior: "" });
+  const [draft, setDraft] = useState<{ name: string; email: string; business: string; prior: "" | "yes" | "no"; paycheck: "" | "yes" | "no"; wages: string }>({ name: "", email: "", business: "Pressure washing", prior: "", paycheck: "", wages: "" });
   // V1: answer to "did last year's return show any total tax?" (signup, editable in Profile). Unset = not answered: the profile's own value stands.
   const [priorYear, setPriorYear] = useState<"yes" | "no" | "unknown" | undefined>(undefined);
   // The sample business has its own answer (Yes); a Profile change while viewing it lives here, so the person's own answer survives.
   const [samplePrior, setSamplePrior] = useState<"yes" | "no" | "unknown" | undefined>(undefined);
+  // V2: expected paycheck wages (cents; 0 = no paycheck job), kept the same way: the person's own, and a change made while viewing the sample.
+  const [wagesAns, setWagesAns] = useState<number | undefined>(undefined);
+  const [sampleWages, setSampleWages] = useState<number | undefined>(undefined);
   const loadSeq = useRef(0);
   const retryLoad = useRef<() => void>(() => {});
   const txnsRef = useRef<Txn[] | null>(null);
@@ -117,7 +120,13 @@ export default function App() {
   // Sample profiles carry their own answer (DEMO_PROFILE); own data starts unanswered (priorYearTax undefined).
   const isSample = profile.priorYearTax !== undefined;
   const answer = isSample ? samplePrior : priorYear;
-  const result = useMemo(() => (txns ? computeNumber(txns, answer ? { ...profile, priorYearTax: answer === "unknown" ? undefined : answer } : profile, today) : null), [txns, profile, today, answer]);
+  const wagesNow = isSample ? sampleWages : wagesAns;
+  const result = useMemo(() => {
+    if (!txns) return null;
+    let p = answer ? { ...profile, priorYearTax: answer === "unknown" ? undefined : answer } : profile;
+    if (wagesNow !== undefined) p = { ...p, wagesCents: wagesNow };
+    return computeNumber(txns, p, today);
+  }, [txns, profile, today, answer, wagesNow]);
 
   function enter(note: string) { loadSeq.current++; epoch.current++; setBusy(""); setLoadFail(false); setSource(note); setTab("home"); go("app"); }
 
@@ -139,7 +148,7 @@ export default function App() {
       // Plaid sometimes hands back only the latest month on a brand-new test item. Need the whole year for an honest tax number.
       const first = (j.txns as Txn[]).reduce((m, t) => (t.date < m ? t.date : m), "9999");
       if ((j.txns as Txn[]).length < 120 || first > `${TAX_YEAR}-02-01`) throw new Error(`Plaid returned ${j.txns.length} transactions, not the full year yet`);
-      setProfile({ ...DEMO_PROFILE, asOf: localToday(), balances: j.balances }); setSamplePrior(undefined);
+      setProfile({ ...DEMO_PROFILE, asOf: localToday(), balances: j.balances }); setSamplePrior(undefined); setSampleWages(undefined);
       setTxns(scaleBusiness(j.txns, f)); enter(via === "qbo" ? `QuickBooks Sandbox · ${bank} (sample business, pulled through a Plaid Sandbox test bank)` : ["Venmo", "Cash App", "PayPal", "Stripe"].includes(bank) ? `${bank} Sandbox (sample business)` : `Plaid Sandbox · ${bank} (test connection, sample business)`);
     } catch (e) {
       // Plaid unreachable (Wi-Fi, keys): fall back to the same data from local files so the demo never breaks.
@@ -157,7 +166,7 @@ export default function App() {
   async function loadFiles(note?: string, f = randomFactor(), current: () => boolean = () => true) {
     const sample = await sampleTxns();
     if (!current()) return;
-    setProfile(DEMO_PROFILE); setSamplePrior(undefined); // V1: the sample business answers for itself
+    setProfile(DEMO_PROFILE); setSamplePrior(undefined); setSampleWages(undefined); // V1/V2: the sample business answers for itself
     setTxns(scaleBusiness(sample, f));
     enter(note || "Sample statements (Chase + Cash App + Venmo)");
   }
@@ -167,7 +176,7 @@ export default function App() {
     if (stageRef.current !== "connect") return;
     // Our Plaid Sandbox test user (Jay's business): pair the bank data with Jay's profile (age, bills he entered).
     if (data.balances.some((b) => b.name.startsWith("Jay's Pressure Washing"))) {
-      setProfile({ ...DEMO_PROFILE, asOf: localToday(), balances: data.balances }); setSamplePrior(undefined);
+      setProfile({ ...DEMO_PROFILE, asOf: localToday(), balances: data.balances }); setSamplePrior(undefined); setSampleWages(undefined);
       setTxns(data.txns); enter("Your bank via Plaid (Sandbox test user)"); return;
     }
     setProfile({ ...DEMO_PROFILE, ownerName: account?.name || "You", businessName: account ? `${account.name}'s ${account.business.toLowerCase()}` : "Your business", age: 0, parentRule: undefined, priorYearTax: undefined, balances: data.balances, bills: [], asOf: localToday() });
@@ -197,13 +206,13 @@ export default function App() {
   function notify(a: Alert) { setToast(a); window.setTimeout(() => setToast(null), 6500); }
   const clock = () => new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
 
-  function signOut() { setAccount(null); setTxns(null); setDraft({ name: "", email: "", business: "Pressure washing", prior: "" }); setPriorYear(undefined); setSamplePrior(undefined); home(); }
+  function signOut() { setAccount(null); setTxns(null); setDraft({ name: "", email: "", business: "Pressure washing", prior: "", paycheck: "", wages: "" }); setPriorYear(undefined); setSamplePrior(undefined); setWagesAns(undefined); setSampleWages(undefined); home(); }
 
   const veil = busy === "bank" || loadFail ? <LoadVeil failed={loadFail} onRetry={() => retryLoad.current()} onClose={() => { setLoadFail(false); window.setTimeout(() => lastFocus.current?.focus(), 0); }} /> : null;
   // While the veil is up, the page behind it cannot be focused or pressed. (React 18 passes inert through only as a string.)
   const hush: object = veil ? { inert: "" } : {};
   if (stage === "landing") return <><div {...hush}><Landing onStart={() => go("signup")} onSignIn={() => go("signup")} onDemo={() => loadSampleBank()} busy={busy === "bank"} /></div>{veil}</>;
-  if (stage === "signup") return <SignUp draft={draft} onDraft={setDraft} onBack={back} onHome={home} onDone={(a) => { setAccount({ ...a, plan: account?.plan }); setPriorYear(a.priorYearTax); go("pricing"); }} />;
+  if (stage === "signup") return <SignUp draft={draft} onDraft={setDraft} onBack={back} onHome={home} onDone={(a) => { setAccount({ ...a, plan: account?.plan }); setPriorYear(a.priorYearTax); setWagesAns(a.wagesCents); go("pricing"); }} />;
   // Changing plan from inside the app goes straight back to the number; during setup the next step is still Connect.
   if (stage === "pricing") return <Pricing name={account?.name || "friend"} current={account?.plan} onBack={back} onHome={home} onPick={(plan) => { const toApp = planFromApp.current && !!txns; setAccount({ ...(account || { name: "", email: "", business: "" }), plan }); go(toApp ? "app" : "connect"); }} />;
   if (stage === "connect" || !txns || !result) return <><div {...hush}><Connect onBack={back} onHome={home} onPlaidSandbox={loadSampleBank} onQuickBooksSandbox={(bank) => loadSampleBank(bank, "qbo")} onPlaid={plaidFor(epoch.current)} onCsv={onCsv} onTyped={onTyped} busy={busy} error={error} /></div>{veil}</>;
@@ -240,11 +249,19 @@ export default function App() {
       </header>
 
       <main className="relative z-10 mx-auto max-w-6xl space-y-4">
+        {result.unsupported && tab !== "profile" ? (
+          <section className="card mx-auto max-w-xl p-7 text-center" role="status" data-unsupported>
+            <h1 className="font-display text-2xl font-semibold">Not supported yet</h1>
+            <p className="mt-3 text-zinc-300">{result.unsupported.replace(/^Not supported yet: /, "")}</p>
+            <button className="btn btn-ghost mt-5" onClick={() => setTab("profile")}>Check your wages in Profile</button>
+          </section>
+        ) : <>
         {tab === "home" && <Home r={result} openLine={openLine} setWhy={setWhy} txns={txns} go={setTab} source={source} />}
         {tab === "alerts" && <Alerts r={result} go={setTab} prefs={prefs} setPref={setPref} />}
         {tab === "settle" && <Settle r={result} />}
         {tab === "learn" && <Learn r={result} />}
-        {tab === "profile" && <Profile r={result} txns={txns} account={account} source={source} plan={PLAN_NAME[account?.plan || "free"]} onReconnect={() => go("connect")} onEditInfo={() => go("signup")} onChangePlan={() => go("pricing")} onSignOut={signOut} onPriorYear={(v) => { if (isSample) { setSamplePrior(v); return; } setPriorYear(v); setDraft((d) => ({ ...d, prior: v === "unknown" ? "" : v })); }} />}
+        </>}
+        {tab === "profile" && <Profile r={result} txns={txns} account={account} source={source} plan={PLAN_NAME[account?.plan || "free"]} onReconnect={() => go("connect")} onEditInfo={() => go("signup")} onChangePlan={() => go("pricing")} onSignOut={signOut} onPriorYear={(v) => { if (isSample) { setSamplePrior(v); return; } setPriorYear(v); setDraft((d) => ({ ...d, prior: v === "unknown" ? "" : v })); }} onWages={(c) => { if (isSample) { setSampleWages(c); return; } setWagesAns(c); setDraft((d) => ({ ...d, paycheck: c > 0 ? "yes" : "no", wages: c > 0 ? (c / 100).toFixed(2) : "" })); }} />}
         <p className="muted pb-4 pt-2 text-center text-xs">Data: {source}. Educational estimate, not tax advice.</p>
       </main>
 
@@ -376,7 +393,7 @@ function Home({ r, openLine, setWhy, txns, go, source }: { r: NumberResult; open
         <div className="flex items-center justify-center gap-2 text-sm text-zinc-400"><span className="dot" style={{ background: anyLate ? "var(--red)" : "var(--green)" }} />Estimated tax you owe</div>
         <div className="font-display num mt-3 text-[clamp(4rem,13vw,8rem)] font-semibold leading-none tracking-tight">{usd(shown)}</div>
         {r.asOf < r.today && <p className="mt-2 text-xs text-zinc-400">{/sample/i.test(source) ? "Sample data" : "Data"} through {fmtDate(r.asOf, true)}</p>}
-        <p className="mx-auto mt-4 max-w-md text-zinc-400">Federal tax on your {TAX_YEAR} business profit as a sole proprietor, minus anything you've already paid.</p>
+        <p className="mx-auto mt-4 max-w-md text-zinc-400">{r.wagesCents > 0 ? <>Federal tax your {TAX_YEAR} business adds on top of {formatUSD(r.wagesCents)} of paycheck wages, as a sole proprietor, minus anything you&apos;ve already paid. Assumes your paycheck withholding covers the tax on your wages.</> : <>Federal tax on your {TAX_YEAR} business profit as a sole proprietor, minus anything you've already paid.</>}</p>
         <button className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-zinc-300 underline-offset-4 hover:text-white hover:underline" onClick={() => setWhy({ title: `How we estimated ${formatUSD(r.owedSoFarCents)}`, body: taxLines.map((l) => `${l.label}: ${formatUSD(l.amountCents)}. ${l.why}`).join("\n\n") })}>Why this much? <Info size={14} /></button>
       </section>
 
@@ -552,12 +569,16 @@ function PayAssist({ r, amountFmt, year, onClose }: { r: NumberResult; amountFmt
 
 /* ---------- Profile / settings ---------- */
 
-function Profile({ r, txns, account, source, plan, onReconnect, onEditInfo, onChangePlan, onSignOut, onPriorYear }: { r: NumberResult; txns: Txn[]; account: Account | null; source: string; plan: string; onReconnect: () => void; onEditInfo: () => void; onChangePlan: () => void; onSignOut: () => void; onPriorYear: (v: "yes" | "no" | "unknown") => void }) {
+function Profile({ r, txns, account, source, plan, onReconnect, onEditInfo, onChangePlan, onSignOut, onPriorYear, onWages }: { r: NumberResult; txns: Txn[]; account: Account | null; source: string; plan: string; onReconnect: () => void; onEditInfo: () => void; onChangePlan: () => void; onSignOut: () => void; onPriorYear: (v: "yes" | "no" | "unknown") => void; onWages: (cents: number) => void }) {
+  const [wagesText, setWagesText] = useState(r.wagesCents > 0 ? (r.wagesCents / 100).toFixed(2) : "0");
+  const [wagesErr, setWagesErr] = useState("");
+  const saveWages = (e: React.FormEvent) => { e.preventDefault(); const c = parseTypedAmount(wagesText, "paycheck wages"); if (typeof c !== "number") return setWagesErr(c.error); setWagesErr(""); onWages(c); };
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState("");
   const hasMonthlyTotals = txns.some(isQuickBooksMonthlyEntry);
   async function exportPdf() {
     if (exporting) return;
+    if (r.unsupported) { setExportError(r.unsupported); return; } // V2: never export a figure the engine declines
     setExporting(true); setExportError("");
     try {
       // Same steps as the on-screen calculation (lib/steps.ts), so the handoff and the screen cannot disagree.
@@ -588,6 +609,13 @@ function Profile({ r, txns, account, source, plan, onReconnect, onEditInfo, onCh
           {rows.map(([k, v]) => <div key={k} className="flex justify-between gap-4 border-b py-2 text-sm"><dt className="muted">{k}</dt><dd className="font-medium">{v}</dd></div>)}
         </dl>
         {/* V1: editable answer; "No" turns off late periods and the penalty (IRS no-prior-year-tax exception). */}
+        {/* V2: paycheck wages change the income tax on the business. 0 = no paycheck job. */}
+        <form onSubmit={saveWages} noValidate className="mt-4">
+          <label className="block text-sm font-medium" htmlFor="pf-wages">Paycheck (W-2) wages this year, before tax</label>
+          <div className="mt-1.5 flex gap-2"><input id="pf-wages" inputMode="decimal" className="input" value={wagesText} onChange={(e) => { setWagesText(e.target.value); setWagesErr(""); }} aria-describedby="pf-wages-help" /><button className="btn btn-ghost shrink-0 !rounded-xl">Update</button></div>
+          <p id="pf-wages-help" className="mt-1 text-xs text-zinc-400">Enter 0 if you have no paycheck job. The estimate assumes your paycheck withholding covers the tax on your wages.</p>
+          {wagesErr && <p className="mt-1 text-sm" style={{ color: "var(--red)" }} role="alert">{wagesErr}</p>}
+        </form>
         <label className="mt-4 block text-sm font-medium" htmlFor="pf-prior">Did last year&apos;s tax return show any total tax?</label>
         <select id="pf-prior" className="input mt-1.5" value={r.priorYear === "unknown" ? "" : r.priorYear} onChange={(e) => onPriorYear((e.target.value || "unknown") as "yes" | "no" | "unknown")}>
           <option value="yes">Yes, some tax</option>
@@ -631,11 +659,11 @@ function Breakdown({ r, source }: { r: NumberResult; source: string }) {
   const usd = (c: number) => formatUSD(c, { cents: true });
   const total = f.se.totalCents + f.incomeTaxCents;
   const per100 = f.netProfitCents > 0 ? (total / f.netProfitCents) * 100 : 0;
-  const next100 = nextProfitTaxCents(f.netProfitCents); // V3: what the next $100 of profit adds (engine difference)
+  const next100 = nextProfitTaxCents(f.netProfitCents, 10_000, f.wagesCents); // V3: what the next $100 of profit adds (engine difference)
   const steps: [string, string, string, number][] = [
     ["1", "You made", "Money in, minus business costs (your profit)", f.netProfitCents],
     ["2", "Self-employment tax", "15.3% on most of your profit. It pays your Social Security and Medicare.", f.se.totalCents],
-    ["3", "Income tax", f.incomeTaxCents > 0 ? `The first ${usd(f.netProfitCents - f.taxableIncomeCents)} is tax-free (deductions). The rest is taxed at 10%, then 12%.` : "Your deductions cover all of it, so the estimate here is $0.", f.incomeTaxCents],
+    ["3", "Income tax", f.wagesCents > 0 ? `What the business adds on top of ${usd(f.wagesCents)} of paycheck wages, which use up the deductions and lower brackets first.` : f.incomeTaxCents > 0 ? `The first ${usd(f.netProfitCents - f.taxableIncomeCents)} is tax-free (deductions). The rest is taxed at 10%, then 12%.` : "Your deductions cover all of it, so the estimate here is $0.", f.incomeTaxCents],
   ];
   return (
     <section className="card p-6 sm:p-8">
@@ -682,7 +710,7 @@ function Breakdown({ r, source }: { r: NumberResult; source: string }) {
           <div className="flex justify-center text-lg text-zinc-600">+</div>
           <div className="rounded-xl border border-zinc-800 p-4">
             <div className="flex items-center justify-between gap-3"><span className="font-medium">Income tax</span><span className="font-display num text-lg font-semibold">{usd(f.incomeTaxCents)}</span></div>
-            <p className="muted mt-1 text-xs leading-relaxed">Your write-offs take {usd(f.netProfitCents - f.taxableIncomeCents)} off the top first. Only the {usd(f.taxableIncomeCents)} left over gets taxed, starting at just <b className="text-zinc-300">10%</b>.</p>
+            {f.wagesCents > 0 ? <p className="muted mt-1 text-xs leading-relaxed">{usd(f.incomeTaxAllCents)} on wages and business together, minus {usd(f.wagesOnlyIncomeTaxCents)} on the wages alone. Your paycheck withholding is assumed to cover the wages part.</p> : <p className="muted mt-1 text-xs leading-relaxed">Your write-offs take {usd(f.netProfitCents - f.taxableIncomeCents)} off the top first. Only the {usd(f.taxableIncomeCents)} left over gets taxed, starting at just <b className="text-zinc-300">10%</b>.</p>}
           </div>
           {r.taxPaidCents > 0 && <div className="flex items-center justify-between gap-3 px-1"><span>Already paid to the IRS</span><span className="num">−{usd(r.taxPaidCents)}</span></div>}
           <div className="flex items-center justify-between gap-3 rounded-xl bg-white px-4 py-3 text-black"><span className="flex items-center gap-1.5 font-semibold"><ArrowRight size={17} strokeWidth={2.75} />Estimated tax you owe</span><span className="font-display num text-xl font-semibold">{usd(r.owedSoFarCents)}</span></div>
@@ -690,7 +718,7 @@ function Breakdown({ r, source }: { r: NumberResult; source: string }) {
         <details className="group/full mt-3 border-t border-zinc-800 pt-3 text-xs">
           <summary className="btn btn-ghost w-full cursor-pointer list-none justify-between !rounded-xl !px-4 !py-3 text-sm">Full IRS calculation (for the accountants)<ChevronDown size={16} className="shrink-0 transition group-open/full:rotate-180" aria-hidden /></summary>
           <div className="mt-3 space-y-4 text-zinc-300">
-            <div className="space-y-1 text-zinc-400"><p>{ASSUMPTION_LINE}</p><p>Data: {source}.</p></div>
+            <div className="space-y-1 text-zinc-400"><p>{assumptionLine(r)}</p><p>Data: {source}.</p></div>
             {calculationSteps(r).map((g) => (
               <div key={g.title}>
                 <div className="text-sm font-semibold text-white">{g.title}</div>
