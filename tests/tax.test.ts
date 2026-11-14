@@ -56,13 +56,30 @@ describe("money parsing", () => {
   });
 });
 
-import { latePenalty } from "../lib/penalty";
-describe("late-payment penalty (7%/yr, daily)", () => {
-  it("hand-checked: $1,000 late 365 days -> $72.50", () => {
-    // 1000 x ((1 + 0.07/365)^365 - 1) = 72.501...
-    expect(latePenalty(100_000, "2026-01-01", "2027-01-01")).toBe(7_250);
+import { latePenalty, penaltySummary } from "../lib/penalty";
+describe("estimated-tax penalty (Form 2210 method: amount x days late / 365 x rate, by rate period, not compounded)", () => {
+  it("hand-checked: $1,000 due Jun 15, 2026, still unpaid on Nov 13 -> $28.55", () => {
+    // Jun 16-30: 15 days at 6% = 1,000 x 15/365 x 0.06 = 2.4658 -> 2.47
+    // Jul 1-Sep 30: 92 days at 7% = 17.6438 -> 17.64;  Oct 1-Nov 13: 44 days at 7% = 8.4384 -> 8.44.  Total 28.55
+    expect(latePenalty(100_000, "2026-06-15", "2026-11-13")).toBe(2_855);
   });
-  it("is zero before the due date", () => {
+  it("hand-checked: $1,000 due Apr 15, 2026 stops on Apr 15, 2027 -> $67.91 (not the compounded $72.50)", () => {
+    // Apr 16-Jun 30: 76 days at 6% = 12.4932 -> 12.49;  Jul-Sep: 92 at 7% = 17.64;  Oct-Dec: 92 at 7% = 17.64
+    // Jan 1-Apr 15, 2027: 105 days at 7% (latest rate carried; not yet published) = 20.137 -> 20.14
+    // Total 12.49 + 17.64 + 17.64 + 20.14 = 67.91; nothing accrues after Apr 15, 2027
+    expect(latePenalty(100_000, "2026-04-15", "2027-12-31")).toBe(6_791);
+    expect(latePenalty(100_000, "2026-04-15", "2027-04-15")).toBe(6_791);
+  });
+  it("is zero on or before the due date", () => {
     expect(latePenalty(100_000, "2026-09-15", "2026-09-01")).toBe(0);
+    expect(latePenalty(100_000, "2026-09-15", "2026-09-15")).toBe(0);
+  });
+  it("hand-checked: one more week in Q4 on $1,000 adds $1.34", () => {
+    // 1,000 x 7/365 x 0.07 = 1.3425 -> 1.34
+    const q = [{ quarter: "Q3", due: "2026-09-15", covers: "", start: "2026-06-01", end: "2026-08-31", amountCents: 100_000, remainingCents: 100_000, status: "missed" as const }];
+    const s = penaltySummary(q, "2026-11-13");
+    expect(s.soFarCents).toBe(latePenalty(100_000, "2026-09-15", "2026-11-13"));
+    expect(s.perWeekCents).toBe(134);
+    expect(s.lateCount).toBe(1);
   });
 });

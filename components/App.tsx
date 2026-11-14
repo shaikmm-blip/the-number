@@ -12,6 +12,7 @@ import { randomFactor, scaleBusiness } from "@/lib/scale";
 import { ASSUMPTIONS, SOURCES, SOURCE_TITLES, TAX_2026, TAX_YEAR } from "@/lib/taxConfig";
 import { ASSUMPTION_LINE, calculationSteps } from "@/lib/steps";
 import { buildEstimatePdf, isQuickBooksMonthlyEntry } from "@/lib/pdf";
+import { CURRENT_RATE_PCT, PENALTY_SOURCES } from "@/lib/penalty";
 import { formGuide, GUIDE_CHECKED, GUIDE_SOURCES } from "@/lib/guide";
 import type { Profile, Txn } from "@/lib/types";
 import { Connect, Landing, Logo, Pricing, SignUp, ThemeToggle, type Account } from "./Onboarding";
@@ -371,7 +372,7 @@ function Home({ r, openLine, setWhy, txns, go, source }: { r: NumberResult; open
               ))}
             </ul>
           )}
-          {anyLate && <p className="muted mt-3 text-xs">Late parts add a small IRS penalty until they're paid. Paying sooner keeps it small.</p>}
+          {anyLate && r.penalty.lateCount > 0 && <p className="muted mb-4 mt-3 text-xs" data-penalty={r.penalty.soFarCents}>Estimated late-payment penalty so far: <b className="text-zinc-300">{usd(r.penalty.soFarCents)}</b>. Each week adds about {usd(r.penalty.perWeekCents)} until the late parts are paid. Uses the Form 2210 method on these estimated amounts: late amount &times; days late &times; the IRS underpayment rate ({CURRENT_RATE_PCT}% a year now; 6% in Apr&ndash;Jun 2026). <PenaltySources /></p>}
           <button className="btn btn-primary w-full" style={{ marginTop: "auto" }} onClick={() => go("settle")}>Settle this now <ArrowRight size={15} /></button>
         </div>
 
@@ -804,7 +805,7 @@ function Learn({ r }: { r: NumberResult }) {
     ["02", "Am I a sole proprietor?", <>If you run a business by yourself and never formed an LLC or corporation, yes, automatically. You and the business are the same for taxes: profit goes on <b>Schedule C</b> of your own return, and nobody takes tax out for you (<a className="underline" href={SOURCES.soleProprietor} target="_blank" rel="noreferrer">IRS</a>).</>],
     ["03", "Self-employment tax (the one nobody tells you about)", <>When you have a job, your boss pays half your Social Security and Medicare. When you work for yourself, you pay both halves: <b>15.3% on 92.35% of your profit</b>. It starts at <b>$400 of profit, at any age</b> (<a className="underline" href={SOURCES.youngEntrepreneurs} target="_blank" rel="noreferrer">IRS</a>). For you, that's an estimated <b>{formatUSD(r.fed.se.totalCents)}</b>.</>],
     ["04", "Why do I owe tax if I'm under the limit?", <>The {formatUSD(TAX_2026.standardDeductionCents)} standard deduction only shields you from <i>income</i> tax. That's why your estimated income tax is {formatUSD(r.fed.incomeTaxCents)}. It doesn't cover self-employment tax at all.</>],
-    ["05", "Paying the IRS during the year", <>Nobody withholds tax from your Cash App, so the IRS expects <b>estimated payments</b> four times a year. Pay at <a className="underline" href="https://www.irs.gov/payments" target="_blank" rel="noreferrer">irs.gov/payments</a>. Paying late adds a small penalty, and paying a bit each month avoids it.</>],
+    ["05", "Paying the IRS during the year", <>Nobody withholds tax from your Cash App, so the IRS expects <b>estimated payments</b> four times a year. Pay at <a className="underline" href="https://www.irs.gov/payments" target="_blank" rel="noreferrer">irs.gov/payments</a>. Paying late adds a penalty for each day a payment is late, at the IRS underpayment rate ({CURRENT_RATE_PCT}% a year now){r.penalty.lateCount > 0 ? <>: for you, an estimated <b>{formatUSD(r.penalty.soFarCents, { cents: true })}</b> so far</> : null}. Paying each amount by its due date avoids it. <PenaltySources /></>],
     ["06", "The 20% small-business deduction", <>Sole proprietors can knock up to 20% off their business profit for income tax (the QBI deduction). We include it, so your number isn't inflated (<a className="underline" href={SOURCES.qbi} target="_blank" rel="noreferrer">IRS</a>).</>],
     ["07", "Business vs. personal on payment apps", <>Mixing them makes your profit look bigger (more tax) or smaller (trouble later). Tag every payment, or better, use a separate business profile.</>],
   ];
@@ -857,6 +858,11 @@ function Learn({ r }: { r: NumberResult }) {
       </details>
     </>
   );
+}
+
+// V4: where the penalty method and rates come from.
+function PenaltySources() {
+  return <>(<a className="underline underline-offset-2 hover:text-white" href={PENALTY_SOURCES.method.url} target="_blank" rel="noreferrer">{PENALTY_SOURCES.method.title}</a>; <a className="underline underline-offset-2 hover:text-white" href={PENALTY_SOURCES.rates.url} target="_blank" rel="noreferrer">{PENALTY_SOURCES.rates.title}</a>)</>;
 }
 
 /* ---------- Why sheet ---------- */
