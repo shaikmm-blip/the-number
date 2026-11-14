@@ -64,7 +64,7 @@ export function buildEstimatePdf(doc: JsPDF, r: NumberResult, meta: PdfMeta, tra
 
   heading("Assumptions and exclusions");
   font(8.5); ink(40);
-  const paycheckLine = r.paycheckRange ? [`Has a paycheck job: wages are not modeled, so the income-tax part is higher than shown. With wages of ${pdfUSD(r.paycheckRange.wagesFromCents)} or more (the standard deduction plus the 10% bracket), the business's taxable part (${pdfUSD(r.paycheckRange.taxableCents)}) is taxed at ${r.paycheckRange.lowPct}% or more: about ${pdfUSD(r.paycheckRange.lowCents)} at ${r.paycheckRange.lowPct}% to ${pdfUSD(r.paycheckRange.highCents)} at ${r.paycheckRange.highPct}% of income tax.`] : [];
+  const paycheckLine = r.paycheckRange ? [`Has a paycheck job: wages are not modeled, so the income-tax part can be higher than shown. For example, filing single with the standard deduction and wages of ${pdfUSD(r.paycheckRange.wagesFromCents)} or more, about ${pdfUSD(r.paycheckRange.taxableCents)} of business income would be taxed at ${r.paycheckRange.lowPct}% or more: about ${pdfUSD(r.paycheckRange.lowCents)} at ${r.paycheckRange.lowPct}% or ${pdfUSD(r.paycheckRange.highCents)} at ${r.paycheckRange.highPct}%, or more in a higher bracket.`] : [];
   for (const line of [ASSUMPTION_LINE, ...paycheckLine, "Not included: state and local tax, other income, credits, and any underpayment penalty.", "Educational estimate, not tax advice. Not reviewed by a CPA or the IRS. Check the amount before paying."]) {
     const wrapped = doc.splitTextToSize(line, R - M); room(wrapped.length * 10); doc.text(wrapped, M, y); y += wrapped.length * 10 + 1;
   }

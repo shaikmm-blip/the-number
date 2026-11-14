@@ -140,7 +140,7 @@ export function computeNumber(txns: Txn[], profile: Profile, today = profile.asO
 
   const lines: Line[] = [
     { key: "se", label: "Self-employment tax", amountCents: fed.se.totalCents, why: seWhy },
-    { key: "income", label: "Federal income tax", amountCents: fed.incomeTaxCents, why: itWhy },
+    { key: "income", label: "Federal income tax", amountCents: fed.incomeTaxCents, why: itWhy + (profile.paycheck === "yes" ? " Your paycheck wages are not included, so the income tax on the business can be higher than this." : "") },
     ...(paid > 0 ? [{ key: "paid", label: "Already paid to the IRS", amountCents: -paid, why: `You've sent ${formatUSD(paid)} in estimated payments this year. That comes off what you owe.`, txnIds: taxTx.map((t) => t.id) }] : []),
     { key: "cushion", label: "One month of business costs", amountCents: cushion, why: `You spend about ${formatUSD(cushion)} a month on the business (fuel, chemicals, insurance, phone). Keeping one month on hand means a slow month or a broken pump doesn't put you in a hole.`, txnIds: expenseTx.map((t) => t.id) },
     ...billsSoon.map((b) => ({ key: `bill-${b.name}`, label: `${b.name} (due ${b.due.slice(5).replace("-", "/")})`, amountCents: b.amountCents, why: `${b.name} is due ${b.due}. It's coming either way, so it's not money you can spend.` })),
@@ -178,7 +178,7 @@ export function computeNumber(txns: Txn[], profile: Profile, today = profile.asO
   else if (building && exempt) alerts.push({ id: "next", level: "info", title: `Optional early payment for this period: ${formatUSD(building.remainingCents)}`, body: `Estimated payments aren't required for you this year, so paying before your ${TAX_YEAR} return is up to you. It covers ${building.covers}.` });
   else if (building) alerts.push({ id: "next", level: "info", title: `Estimated payment for this period: ${formatUSD(building.remainingCents)}, due ${building.due} (${dueIn(building.due, today)})`, body: building.due < today ? `Its due date has passed. It covers ${building.covers}.` : building.end < today ? `This period has ended; its payment is due ${building.due}. It covers ${building.covers}.` : `This one is still open. It covers ${building.covers}, and it changes as income, costs and payments come in until the period ends.` });
   if (reviewCount) alerts.push({ id: "review", level: "info", title: `${reviewCount} payments need a quick answer`, body: `Tell us business or personal. Payment apps expect business money on a business profile, so sorting these keeps you legit.` });
-  if (profile.parentRule && owed > profile.parentRule.amountCents) alerts.push({ id: "rule", level: "warning", title: `${profile.parentRule.label} is wrong`, body: `You're under the limit for income tax, but you still owe an estimated ${formatUSD(owed)}, mostly self-employment tax. It starts at $400 of profit, at any age.` });
+  if (profile.parentRule && profile.paycheck !== "yes" && owed > profile.parentRule.amountCents) alerts.push({ id: "rule", level: "warning", title: `${profile.parentRule.label} is wrong`, body: `You're under the limit for income tax, but you still owe an estimated ${formatUSD(owed)}, mostly self-employment tax. It starts at $400 of profit, at any age.` });
 
   return {
     asOf, today, incomeCents: income, expensesCents: expenses, netProfitCents: net, reviewCount, fed,

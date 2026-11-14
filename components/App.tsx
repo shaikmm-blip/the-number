@@ -462,7 +462,7 @@ function Settle({ r }: { r: NumberResult }) {
       <div className="text-center">
         <h1 className="font-display mt-3 text-4xl font-semibold">Settle up</h1>
         <p className="muted mt-1">Pay the IRS without the maze.</p>
-        {r.paycheckRange && <p className="mx-auto mt-3 max-w-sm text-sm text-zinc-300" data-paycheck-settle>You have a paycheck job, so the income-tax part will be higher than this estimate: about {formatUSD(r.paycheckRange.lowCents)} to {formatUSD(r.paycheckRange.highCents)} instead of {formatUSD(r.fed.incomeTaxCents)} with wages of {formatUSD(r.paycheckRange.wagesFromCents)} or more (see Home).</p>}
+        {r.paycheckRange && <p className="mx-auto mt-3 max-w-sm text-sm text-zinc-300" data-paycheck-settle>This estimate leaves out your paycheck, so the income-tax part can be higher: for example about {formatUSD(r.paycheckRange.lowCents)} at {r.paycheckRange.lowPct}% or {formatUSD(r.paycheckRange.highCents)} at {r.paycheckRange.highPct}% instead of {formatUSD(r.fed.incomeTaxCents)}, or more in a higher bracket (see Home).</p>}
         {r.priorYear === "no" && <p className="mx-auto mt-3 max-w-sm text-sm text-zinc-300">You said last year&apos;s total tax was $0, so estimated payments aren&apos;t required this year. This estimate is due with your {TAX_YEAR} return; paying some of it early is optional.</p>}
         <p className="mx-auto mt-3 max-w-sm text-xs leading-relaxed text-zinc-400">This is an estimate from your data &mdash; double-check the amount and your details on the IRS page before you pay. Educational estimate, not tax advice.</p>
       </div>
@@ -503,7 +503,7 @@ function PayAssist({ r, amountFmt, year, onClose }: { r: NumberResult; amountFmt
     { label: "Reason for Payment", verb: "Pick the reason in the 1st dropdown", show: "Estimated tax", copy: "Estimated Tax" },
     { label: "Apply Payment To", verb: "Then pick the form", show: "1040-ES", copy: "1040-ES" },
     { label: "Tax Period for Payment", verb: "Pick the year", show: String(year), copy: String(year) },
-    { label: "Amount", verb: "Type or paste this amount — it's our estimate", show: amountFmt, copy: amountRaw },
+    { label: "Amount", verb: r.paycheckRange ? "Type or paste this amount — our estimate without your paycheck wages, so it can be too low" : "Type or paste this amount — it's our estimate", show: amountFmt, copy: amountRaw },
   ];
   const TOTAL = fields.length + 1;
   const [i, setI] = useState(0);
@@ -544,7 +544,7 @@ function PayAssist({ r, amountFmt, year, onClose }: { r: NumberResult; amountFmt
           <div className="mt-6 text-center">
             <span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-white text-black"><Check size={22} /></span>
             <h3 className="font-display mt-4 text-xl font-semibold">One step left &mdash; on the IRS page</h3>
-            <p className="muted mt-1 text-sm">Enter your bank routing + account number, then hit <b className="text-white">Submit</b>. That pays {amountFmt}, your estimated tax.</p>
+            <p className="muted mt-1 text-sm">Enter your bank routing + account number, then hit <b className="text-white">Submit</b>. That pays {amountFmt}, your estimated tax{r.paycheckRange ? " without your paycheck wages; the tax with them can be higher" : ""}.</p>
             <button className="btn btn-primary mt-5 w-full !rounded-xl !py-3.5" onClick={onClose}>Done</button>
           </div>
         )}
@@ -667,7 +667,7 @@ function Breakdown({ r, source }: { r: NumberResult; source: string }) {
         </div>
         <div className="mt-1.5 flex justify-between text-xs text-zinc-400"><span><span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-white align-middle" />taxes</span><span><span className="mr-1.5 inline-block h-2 w-2 rounded-full border border-white/70 align-middle" />yours to keep</span></div>
         <p className="mt-3 text-sm" data-next100={next100}>Your next <b>$100</b> of profit adds an estimated <b className="num">{usd(next100)}</b> in tax{next100 > Math.round(per100 * 100) ? ", more than the average" : ""}.</p>
-        <p className="mt-1 text-xs text-zinc-400">Federal tax only. State and city taxes are not included.</p>
+        <p className="mt-1 text-xs text-zinc-400">Federal tax only. State and city taxes are not included.{r.paycheckRange ? " Your paycheck wages are not included either, so the income tax here can be too low." : ""}</p>
       </div>
 
       {/* Three plain steps */}
@@ -862,7 +862,7 @@ function Learn({ r }: { r: NumberResult }) {
     ["01", "What is The Number?", <>An estimate of how much you owe the IRS for your business this year, after anything you've already paid. One number, worked out from your transactions.</>],
     ["02", "Am I a sole proprietor?", <>If you run a business by yourself and never formed an LLC or corporation, yes, automatically. You and the business are the same for taxes: profit goes on <b>Schedule C</b> of your own return, and nobody takes tax out for you (<a className="underline" href={SOURCES.soleProprietor} target="_blank" rel="noreferrer">IRS</a>).</>],
     ["03", "Self-employment tax (the one nobody tells you about)", <>When you have a job, your boss pays half your Social Security and Medicare. When you work for yourself, you pay both halves: <b>15.3% on 92.35% of your profit</b>. It starts at <b>$400 of profit, at any age</b> (<a className="underline" href={SOURCES.youngEntrepreneurs} target="_blank" rel="noreferrer">IRS</a>). For you, that's an estimated <b>{formatUSD(r.fed.se.totalCents)}</b>.</>],
-    ["04", "Why do I owe tax if I'm under the limit?", <>The {formatUSD(TAX_2026.standardDeductionCents)} standard deduction only shields you from <i>income</i> tax. That's why your estimated income tax is {formatUSD(r.fed.incomeTaxCents)}. It doesn't cover self-employment tax at all.</>],
+    ["04", "Why do I owe tax if I'm under the limit?", <>The {formatUSD(TAX_2026.standardDeductionCents)} standard deduction only shields you from <i>income</i> tax. That's why your estimated income tax is {formatUSD(r.fed.incomeTaxCents)}. It doesn't cover self-employment tax at all.{r.paycheckRange ? " With a paycheck, your wages use up that deduction first, so the business's income tax can be higher than shown." : ""}</>],
     ["05", "Paying the IRS during the year", <>Nobody withholds tax from your Cash App, so the IRS expects <b>estimated payments</b> four times a year. Pay at <a className="underline" href="https://www.irs.gov/payments" target="_blank" rel="noreferrer">irs.gov/payments</a>. Paying a required payment late can add a penalty for each day it&apos;s late, at the IRS underpayment rate ({CURRENT_RATE_PCT}% a year now).{r.priorYear !== "no" && r.penalty.soFarCents > 0 ? <> On the amounts here, that&apos;s an estimated <b>{formatUSD(r.penalty.soFarCents, { cents: true })}</b> so far and about {formatUSD(r.penalty.perWeekCents, { cents: true })} more each week{r.penalty.assumedRate ? " (7% assumed for 2027, not yet published)" : ""}; the IRS figures the actual penalty from each period&apos;s required payment.</> : null}{r.priorYear === "no" ? <> You said last year&apos;s total tax was $0, so estimated payments aren&apos;t required for you this year.</> : null} <PenaltySources /></>],
     ["06", "The 20% small-business deduction", <>Sole proprietors can knock up to 20% off their business profit for income tax (the QBI deduction). We include it, so your number isn't inflated (<a className="underline" href={SOURCES.qbi} target="_blank" rel="noreferrer">IRS</a>).</>],
     ["07", "Business vs. personal on payment apps", <>Mixing them makes your profit look bigger (more tax) or smaller (trouble later). Tag every payment, or better, use a separate business profile.</>],
@@ -923,7 +923,7 @@ function PaycheckNotice({ r }: { r: NumberResult }) {
   const p = r.paycheckRange!;
   return (
     <div className="mx-auto mt-4 max-w-md rounded-2xl border border-zinc-700 p-4 text-left text-sm text-zinc-300" role="note" data-paycheck-notice>
-      <b className="text-white">You have a paycheck job, so the income-tax part is higher than shown.</b> This estimate treats the business as your only income. With wages of {formatUSD(p.wagesFromCents)} or more (enough to use up the {formatUSD(TAX_2026.standardDeductionCents)} standard deduction and the 10% bracket), the business&apos;s taxable part ({formatUSD(p.taxableCents, { cents: true })}) is taxed at {p.lowPct}% or more: about {formatUSD(p.lowCents, { cents: true })} at {p.lowPct}% to {formatUSD(p.highCents, { cents: true })} at {p.highPct}% of income tax, instead of {formatUSD(r.fed.incomeTaxCents, { cents: true })}. Higher wages can mean a higher bracket. An estimate that includes your wages isn&apos;t supported yet.
+      <b className="text-white">You have a paycheck job, so the income-tax part can be higher than shown.</b> This estimate leaves your wages out and treats the business as your only income. For example, filing single with the standard deduction and wages of {formatUSD(p.wagesFromCents)} or more (enough to use up the {formatUSD(TAX_2026.standardDeductionCents)} standard deduction and the 10% bracket), about {formatUSD(p.taxableCents, { cents: true })} of business income would be taxed at {p.lowPct}% or more: about {formatUSD(p.lowCents, { cents: true })} at {p.lowPct}% or {formatUSD(p.highCents, { cents: true })} at {p.highPct}%, instead of {formatUSD(r.fed.incomeTaxCents, { cents: true })}. In a higher bracket it would be more. An estimate that includes your wages isn&apos;t supported yet.
     </div>
   );
 }

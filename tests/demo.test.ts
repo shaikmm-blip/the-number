@@ -232,3 +232,15 @@ describe("V2 fallback: a paycheck isn't modeled; Yes shows how much higher the i
     expect(r.paycheckRange).toBeUndefined();
   });
 });
+
+describe("V2 fallback follow-up: Yes qualifies every income-tax surface", () => {
+  it("Why text, the sample's 'under the limit' alert and the guide's taxable income carry the wages limitation", () => {
+    const r = computeNumber(scaleBusiness(load(), DEMO_FACTOR), { ...DEMO_PROFILE, paycheck: "yes" }, "2026-11-13");
+    expect(r.lines.find((l) => l.key === "income")!.why).toMatch(/paycheck wages are not included/);
+    expect(r.alerts.some((a) => a.id === "rule")).toBe(false); // "under the limit for income tax" doesn't hold with a paycheck
+    expect(formGuide(r).flatMap((s) => s.rows).find((x) => x.id === "taxable")!.where).toMatch(/paycheck wages are not included/);
+    const no = computeNumber(scaleBusiness(load(), DEMO_FACTOR), DEMO_PROFILE, "2026-11-13");
+    expect(no.alerts.some((a) => a.id === "rule")).toBe(true); // unchanged without a paycheck
+    expect(no.lines.find((l) => l.key === "income")!.why).not.toMatch(/paycheck/);
+  });
+});
