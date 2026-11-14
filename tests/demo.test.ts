@@ -197,3 +197,20 @@ describe("V1/V4 follow-up: the exemption reaches every surface; the penalty copy
     expect(body).not.toMatch(/assumed/); // Nov 13: no 2027 days counted
   });
 });
+
+import { typedTotalsTxns } from "../lib/entry";
+describe("V1/V4 follow-up 2: typed totals with No; no 'overdue' from typed data", () => {
+  const typedProfile = { ...DEMO_PROFILE, typedTotals: true, priorYearTax: undefined, balances: [], bills: [], asOf: "2026-12-31" };
+  const rows = typedTotalsTxns({ incomeCents: 3_000_000, costsCents: 300_000, paidCents: 0 }, "2026-12-31");
+  it("typed + No: no dated payment alert at all, only the exemption", () => {
+    const r = computeNumber(rows, { ...typedProfile, priorYearTax: "no" }, "2027-01-20");
+    expect(r.alerts.some((a) => a.id === "next")).toBe(false);
+    expect(r.alerts.some((a) => a.id === "prior")).toBe(true);
+  });
+  it("typed, not answered, after Jan 15: the due date is named but never called overdue", () => {
+    const r = computeNumber(rows, typedProfile, "2027-01-20");
+    const next = r.alerts.find((a) => a.id === "next")!;
+    expect(next.title).toBe("Next estimated tax due date: 2027-01-15");
+    expect(next.title + next.body).not.toMatch(/overdue/); // ("nothing is marked late" is the copy's own reassurance)
+  });
+});

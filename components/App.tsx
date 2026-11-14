@@ -47,6 +47,8 @@ export default function App() {
   const [draft, setDraft] = useState<{ name: string; email: string; business: string; prior: "" | "yes" | "no" }>({ name: "", email: "", business: "Pressure washing", prior: "" });
   // V1: answer to "did last year's return show any total tax?" (signup, editable in Profile). Unset = not answered: the profile's own value stands.
   const [priorYear, setPriorYear] = useState<"yes" | "no" | "unknown" | undefined>(undefined);
+  // The sample business has its own answer (Yes); a Profile change while viewing it lives here, so the person's own answer survives.
+  const [samplePrior, setSamplePrior] = useState<"yes" | "no" | "unknown" | undefined>(undefined);
   const loadSeq = useRef(0);
   const retryLoad = useRef<() => void>(() => {});
   const txnsRef = useRef<Txn[] | null>(null);
@@ -112,7 +114,10 @@ export default function App() {
     tick(); document.addEventListener("visibilitychange", wake); window.addEventListener("focus", wake);
     return () => { window.clearTimeout(timer); document.removeEventListener("visibilitychange", wake); window.removeEventListener("focus", wake); };
   }, []);
-  const result = useMemo(() => (txns ? computeNumber(txns, priorYear ? { ...profile, priorYearTax: priorYear === "unknown" ? undefined : priorYear } : profile, today) : null), [txns, profile, today, priorYear]);
+  // Sample profiles carry their own answer (DEMO_PROFILE); own data starts unanswered (priorYearTax undefined).
+  const isSample = profile.priorYearTax !== undefined;
+  const answer = isSample ? samplePrior : priorYear;
+  const result = useMemo(() => (txns ? computeNumber(txns, answer ? { ...profile, priorYearTax: answer === "unknown" ? undefined : answer } : profile, today) : null), [txns, profile, today, answer]);
 
   function enter(note: string) { loadSeq.current++; epoch.current++; setBusy(""); setLoadFail(false); setSource(note); setTab("home"); go("app"); }
 
@@ -134,7 +139,7 @@ export default function App() {
       // Plaid sometimes hands back only the latest month on a brand-new test item. Need the whole year for an honest tax number.
       const first = (j.txns as Txn[]).reduce((m, t) => (t.date < m ? t.date : m), "9999");
       if ((j.txns as Txn[]).length < 120 || first > `${TAX_YEAR}-02-01`) throw new Error(`Plaid returned ${j.txns.length} transactions, not the full year yet`);
-      setProfile({ ...DEMO_PROFILE, asOf: localToday(), balances: j.balances }); setPriorYear(undefined);
+      setProfile({ ...DEMO_PROFILE, asOf: localToday(), balances: j.balances }); setSamplePrior(undefined);
       setTxns(scaleBusiness(j.txns, f)); enter(via === "qbo" ? `QuickBooks Sandbox · ${bank} (sample business, pulled through a Plaid Sandbox test bank)` : ["Venmo", "Cash App", "PayPal", "Stripe"].includes(bank) ? `${bank} Sandbox (sample business)` : `Plaid Sandbox · ${bank} (test connection, sample business)`);
     } catch (e) {
       // Plaid unreachable (Wi-Fi, keys): fall back to the same data from local files so the demo never breaks.
@@ -152,7 +157,7 @@ export default function App() {
   async function loadFiles(note?: string, f = randomFactor(), current: () => boolean = () => true) {
     const sample = await sampleTxns();
     if (!current()) return;
-    setProfile(DEMO_PROFILE); setPriorYear(undefined); // V1: the sample business answers for itself
+    setProfile(DEMO_PROFILE); setSamplePrior(undefined); // V1: the sample business answers for itself
     setTxns(scaleBusiness(sample, f));
     enter(note || "Sample statements (Chase + Cash App + Venmo)");
   }
@@ -162,7 +167,7 @@ export default function App() {
     if (stageRef.current !== "connect") return;
     // Our Plaid Sandbox test user (Jay's business): pair the bank data with Jay's profile (age, bills he entered).
     if (data.balances.some((b) => b.name.startsWith("Jay's Pressure Washing"))) {
-      setProfile({ ...DEMO_PROFILE, asOf: localToday(), balances: data.balances }); setPriorYear(undefined);
+      setProfile({ ...DEMO_PROFILE, asOf: localToday(), balances: data.balances }); setSamplePrior(undefined);
       setTxns(data.txns); enter("Your bank via Plaid (Sandbox test user)"); return;
     }
     setProfile({ ...DEMO_PROFILE, ownerName: account?.name || "You", businessName: account ? `${account.name}'s ${account.business.toLowerCase()}` : "Your business", age: 0, parentRule: undefined, priorYearTax: undefined, balances: data.balances, bills: [], asOf: localToday() });
@@ -192,7 +197,7 @@ export default function App() {
   function notify(a: Alert) { setToast(a); window.setTimeout(() => setToast(null), 6500); }
   const clock = () => new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
 
-  function signOut() { setAccount(null); setTxns(null); setDraft({ name: "", email: "", business: "Pressure washing", prior: "" }); setPriorYear(undefined); home(); }
+  function signOut() { setAccount(null); setTxns(null); setDraft({ name: "", email: "", business: "Pressure washing", prior: "" }); setPriorYear(undefined); setSamplePrior(undefined); home(); }
 
   const veil = busy === "bank" || loadFail ? <LoadVeil failed={loadFail} onRetry={() => retryLoad.current()} onClose={() => { setLoadFail(false); window.setTimeout(() => lastFocus.current?.focus(), 0); }} /> : null;
   // While the veil is up, the page behind it cannot be focused or pressed. (React 18 passes inert through only as a string.)
@@ -239,7 +244,7 @@ export default function App() {
         {tab === "alerts" && <Alerts r={result} go={setTab} prefs={prefs} setPref={setPref} />}
         {tab === "settle" && <Settle r={result} />}
         {tab === "learn" && <Learn r={result} />}
-        {tab === "profile" && <Profile r={result} txns={txns} account={account} source={source} plan={PLAN_NAME[account?.plan || "free"]} onReconnect={() => go("connect")} onEditInfo={() => go("signup")} onChangePlan={() => go("pricing")} onSignOut={signOut} onPriorYear={(v) => { setPriorYear(v); setDraft((d) => ({ ...d, prior: v === "unknown" ? "" : v })); }} />}
+        {tab === "profile" && <Profile r={result} txns={txns} account={account} source={source} plan={PLAN_NAME[account?.plan || "free"]} onReconnect={() => go("connect")} onEditInfo={() => go("signup")} onChangePlan={() => go("pricing")} onSignOut={signOut} onPriorYear={(v) => { if (isSample) { setSamplePrior(v); return; } setPriorYear(v); setDraft((d) => ({ ...d, prior: v === "unknown" ? "" : v })); }} />}
         <p className="muted pb-4 pt-2 text-center text-xs">Data: {source}. Educational estimate, not tax advice.</p>
       </main>
 
@@ -827,7 +832,7 @@ function TxnRow({ t, children }: { t: Txn; children?: React.ReactNode }) {
 const AU = "https://american.edu/media/news/20230418_CarolineBrucknerTaxLiteracySurvey.cfm";
 const FB = "https://www.globenewswire.com/news-release/2025/03/19/3045674/0/en/Hidden-Tax-Challenges-for-Small-Businesses-FreshBooks-2025-Tax-Trend-Report.html";
 const STATS: { big: string; what: string; means: (r: NumberResult) => string; src: string; url: string }[] = [
-  { big: "1 in 3", what: "didn't know whether they had to pay the IRS every quarter.", means: (r) => `Your estimated tax so far is ${formatUSD(r.owedSoFarCents)}; the next due date is ${r.next.due}.`, src: "American University Kogod, Small Business Tax Literacy Survey", url: AU },
+  { big: "1 in 3", what: "didn't know whether they had to pay the IRS every quarter.", means: (r) => r.priorYear === "no" ? `Your estimated tax so far is ${formatUSD(r.owedSoFarCents)}; estimated payments aren't required for you this year.` : `Your estimated tax so far is ${formatUSD(r.owedSoFarCents)}; the next due date is ${r.next.due}.`, src: "American University Kogod, Small Business Tax Literacy Survey", url: AU },
   { big: "37%", what: "say filing taxes leaves them anxious and confused.", means: () => "That's why every line of your Number has a plain-English 'why'.", src: "American University Kogod, Small Business Tax Literacy Survey", url: AU },
   { big: "74%", what: "of small business owners and freelancers aren't fully confident about their taxes.", means: () => "Confidence starts with knowing your number before April, not after.", src: "FreshBooks 2025 Tax Trends Report (about 1,300 surveyed; 26% said completely confident)", url: FB },
   { big: "35%", what: "say organizing receipts is their biggest tax headache.", means: (r) => `We sorted ${formatUSD(r.expensesCents)} of your business costs automatically.`, src: "FreshBooks 2025 Tax Trends Report", url: FB },
@@ -840,7 +845,7 @@ function Learn({ r }: { r: NumberResult }) {
     ["02", "Am I a sole proprietor?", <>If you run a business by yourself and never formed an LLC or corporation, yes, automatically. You and the business are the same for taxes: profit goes on <b>Schedule C</b> of your own return, and nobody takes tax out for you (<a className="underline" href={SOURCES.soleProprietor} target="_blank" rel="noreferrer">IRS</a>).</>],
     ["03", "Self-employment tax (the one nobody tells you about)", <>When you have a job, your boss pays half your Social Security and Medicare. When you work for yourself, you pay both halves: <b>15.3% on 92.35% of your profit</b>. It starts at <b>$400 of profit, at any age</b> (<a className="underline" href={SOURCES.youngEntrepreneurs} target="_blank" rel="noreferrer">IRS</a>). For you, that's an estimated <b>{formatUSD(r.fed.se.totalCents)}</b>.</>],
     ["04", "Why do I owe tax if I'm under the limit?", <>The {formatUSD(TAX_2026.standardDeductionCents)} standard deduction only shields you from <i>income</i> tax. That's why your estimated income tax is {formatUSD(r.fed.incomeTaxCents)}. It doesn't cover self-employment tax at all.</>],
-    ["05", "Paying the IRS during the year", <>Nobody withholds tax from your Cash App, so the IRS expects <b>estimated payments</b> four times a year. Pay at <a className="underline" href="https://www.irs.gov/payments" target="_blank" rel="noreferrer">irs.gov/payments</a>. Paying a required payment late can add a penalty for each day it&apos;s late, at the IRS underpayment rate ({CURRENT_RATE_PCT}% a year now).{r.priorYear !== "no" && r.penalty.soFarCents > 0 ? <> On the amounts here, that&apos;s an estimated <b>{formatUSD(r.penalty.soFarCents, { cents: true })}</b> so far and about {formatUSD(r.penalty.perWeekCents, { cents: true })} more each week; the IRS figures the actual penalty from each period&apos;s required payment.</> : null}{r.priorYear === "no" ? <> You said last year&apos;s total tax was $0, so estimated payments aren&apos;t required for you this year.</> : null} <PenaltySources /></>],
+    ["05", "Paying the IRS during the year", <>Nobody withholds tax from your Cash App, so the IRS expects <b>estimated payments</b> four times a year. Pay at <a className="underline" href="https://www.irs.gov/payments" target="_blank" rel="noreferrer">irs.gov/payments</a>. Paying a required payment late can add a penalty for each day it&apos;s late, at the IRS underpayment rate ({CURRENT_RATE_PCT}% a year now).{r.priorYear !== "no" && r.penalty.soFarCents > 0 ? <> On the amounts here, that&apos;s an estimated <b>{formatUSD(r.penalty.soFarCents, { cents: true })}</b> so far and about {formatUSD(r.penalty.perWeekCents, { cents: true })} more each week{r.penalty.assumedRate ? " (7% assumed for 2027, not yet published)" : ""}; the IRS figures the actual penalty from each period&apos;s required payment.</> : null}{r.priorYear === "no" ? <> You said last year&apos;s total tax was $0, so estimated payments aren&apos;t required for you this year.</> : null} <PenaltySources /></>],
     ["06", "The 20% small-business deduction", <>Sole proprietors can knock up to 20% off their business profit for income tax (the QBI deduction). We include it, so your number isn't inflated (<a className="underline" href={SOURCES.qbi} target="_blank" rel="noreferrer">IRS</a>).</>],
     ["07", "Business vs. personal on payment apps", <>Mixing them makes your profit look bigger (more tax) or smaller (trouble later). Tag every payment, or better, use a separate business profile.</>],
   ];
