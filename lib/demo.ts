@@ -8,6 +8,7 @@ export const DEMO_PROFILE: Profile = {
   state: "Ohio",
   parentRule: { label: "\"You're under $16,100, so you owe nothing\"", amountCents: 0 },
   asOf: "2026-11-06",
+  priorYearTax: "yes", // the sample had tax last year, so the demo shows late periods and the penalty
   balances: [
     { name: "Chase checking", balanceCents: 184_012 },
     { name: "Cash App", balanceCents: 61_037 },

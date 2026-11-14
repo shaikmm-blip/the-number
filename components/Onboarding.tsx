@@ -234,21 +234,22 @@ function Shell({ children, step, onBack, onHome }: { children: React.ReactNode; 
 
 /* ---------------- Sign up ---------------- */
 
-export type Account = { name: string; email: string; business: string; plan?: string };
+export type Account = { name: string; email: string; business: string; plan?: string; priorYearTax?: "yes" | "no" };
 
-type Draft = { name: string; email: string; business: string };
+type Draft = { name: string; email: string; business: string; prior: "" | "yes" | "no" };
 
 export function SignUp({ onDone, onBack, onHome, draft, onDraft }: { onDone: (a: Account) => void; onBack: () => void; onHome: () => void; draft: Draft; onDraft: (d: Draft) => void }) {
   // What was typed is kept by the parent, so coming Back to this step shows it again.
   const [name, setName] = useState(draft.name), [email, setEmail] = useState(draft.email), [business, setBusiness] = useState(draft.business);
-  useEffect(() => { onDraft({ name, email, business }); }, [name, email, business, onDraft]);
+  const [prior, setPrior] = useState(draft.prior);
+  useEffect(() => { onDraft({ name, email, business, prior }); }, [name, email, business, prior, onDraft]);
   const [err, setErr] = useState("");
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return setErr("Add your first name so we know what to call you.");
     if (!/^\S+@\S+\.\S+$/.test(email)) return setErr("That email doesn't look right. Check for a typo.");
     if (!business.trim()) return setErr("Tell us what your business does, in your own words.");
-    onDone({ name: name.trim().split(" ")[0], email: email.trim(), business: business.trim() });
+    onDone({ name: name.trim().split(" ")[0], email: email.trim(), business: business.trim(), priorYearTax: prior || undefined });
   };
   return (
     <Shell step={0} onBack={onBack} onHome={onHome}>
@@ -276,6 +277,18 @@ export function SignUp({ onDone, onBack, onHome, draft, onDraft }: { onDone: (a:
           <input id="su-email" className="input mt-1.5" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@email.com" type="email" autoComplete="email" />
           <label className="mt-4 block text-sm font-medium" htmlFor="su-biz">What's your business?</label>
           <input id="su-biz" className="input mt-1.5" value={business} onChange={(e) => setBusiness(e.target.value)} placeholder="Pressure washing, lawn care, reselling…" />
+          {/* V1: asked once; editable in Profile. A refund is not zero tax, so it asks about total tax. */}
+          <fieldset className="mt-4">
+            <legend className="text-sm font-medium">Did last year&apos;s tax return show any total tax?</legend>
+            <p className="mt-1 text-xs text-zinc-400">Check the &ldquo;total tax&rdquo; line on your Form 1040. Getting a refund isn&apos;t the same as $0 total tax.</p>
+            <div className="mt-2 grid gap-2">
+              {([["yes", "Yes, some tax"], ["no", "No: $0 total tax or I didn't have to file, for a full year as a U.S. citizen or resident"], ["", "Not sure (skip for now)"]] as const).map(([v, l]) => (
+                <label key={v || "skip"} className={`flex cursor-pointer items-start gap-2.5 rounded-xl border px-3 py-2.5 text-sm has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-white ${prior === v ? "border-white" : "border-zinc-800"}`}>
+                  <input type="radio" name="su-prior" value={v} checked={prior === v} onChange={() => setPrior(v)} className="mt-0.5 accent-white" />{l}
+                </label>
+              ))}
+            </div>
+          </fieldset>
           {err && <p className="mt-3 text-sm" style={{ color: "var(--red)" }}>{err}</p>}
           <button className="btn btn-primary mt-6 w-full !rounded-xl !py-3.5">Create account <ArrowRight size={16} /></button>
           <p className="mt-4 text-center text-xs text-zinc-400">Hackathon demo: nothing is saved. Reloading starts over.</p>

@@ -43,7 +43,9 @@ export default function App() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<string>("");
   const [loadFail, setLoadFail] = useState(false);
-  const [draft, setDraft] = useState({ name: "", email: "", business: "Pressure washing" });
+  const [draft, setDraft] = useState<{ name: string; email: string; business: string; prior: "" | "yes" | "no" }>({ name: "", email: "", business: "Pressure washing", prior: "" });
+  // V1: answer to "did last year's return show any total tax?" (signup, editable in Profile). Unset = not answered: the profile's own value stands.
+  const [priorYear, setPriorYear] = useState<"yes" | "no" | "unknown" | undefined>(undefined);
   const loadSeq = useRef(0);
   const retryLoad = useRef<() => void>(() => {});
   const txnsRef = useRef<Txn[] | null>(null);
@@ -95,7 +97,7 @@ export default function App() {
       if (!r.ok) throw new Error(j.error);
       if (loadSeq.current !== seq) return; // superseded (e.g. a CSV was used meanwhile)
       const last = (j.txns as Txn[]).reduce((m, t) => (t.date > m ? t.date : m), `${TAX_YEAR}-01-01`);
-      setProfile({ ...DEMO_PROFILE, ownerName: "You", businessName: "Your business", age: 0, parentRule: undefined, balances: [], bills: [], asOf: localToday() > last ? localToday() : last });
+      setProfile({ ...DEMO_PROFILE, ownerName: "You", businessName: "Your business", age: 0, parentRule: undefined, priorYearTax: undefined, balances: [], bills: [], asOf: localToday() > last ? localToday() : last });
       setTxns(j.txns); enter("QuickBooks (sandbox company), Profit & Loss");
     }).catch((e) => { if (loadSeq.current === seq) setError((e as Error).message); }).finally(() => { if (loadSeq.current === seq) setBusy(""); });
   }, []);
@@ -109,7 +111,7 @@ export default function App() {
     tick(); document.addEventListener("visibilitychange", wake); window.addEventListener("focus", wake);
     return () => { window.clearTimeout(timer); document.removeEventListener("visibilitychange", wake); window.removeEventListener("focus", wake); };
   }, []);
-  const result = useMemo(() => (txns ? computeNumber(txns, profile, today) : null), [txns, profile, today]);
+  const result = useMemo(() => (txns ? computeNumber(txns, priorYear ? { ...profile, priorYearTax: priorYear === "unknown" ? undefined : priorYear } : profile, today) : null), [txns, profile, today, priorYear]);
 
   function enter(note: string) { loadSeq.current++; epoch.current++; setBusy(""); setLoadFail(false); setSource(note); setTab("home"); go("app"); }
 
@@ -162,7 +164,7 @@ export default function App() {
       setProfile({ ...DEMO_PROFILE, asOf: localToday(), balances: data.balances });
       setTxns(data.txns); enter("Your bank via Plaid (Sandbox test user)"); return;
     }
-    setProfile({ ...DEMO_PROFILE, ownerName: account?.name || "You", businessName: account ? `${account.name}'s ${account.business.toLowerCase()}` : "Your business", age: 0, parentRule: undefined, balances: data.balances, bills: [], asOf: localToday() });
+    setProfile({ ...DEMO_PROFILE, ownerName: account?.name || "You", businessName: account ? `${account.name}'s ${account.business.toLowerCase()}` : "Your business", age: 0, parentRule: undefined, priorYearTax: undefined, balances: data.balances, bills: [], asOf: localToday() });
     setTxns(data.txns); enter("Your bank via Plaid");
   }
 
@@ -171,7 +173,7 @@ export default function App() {
     const today = localToday();
     // Only this tax year's rows set the calculation date; rows from other years don't count and mustn't move it.
     const last = rows.filter((t) => t.date.startsWith(String(TAX_YEAR))).reduce((m, t) => (t.date > m ? t.date : m), `${TAX_YEAR}-01-01`);
-    setProfile({ ...DEMO_PROFILE, ownerName: account?.name || "You", businessName: account?.business || "Your business", age: 0, parentRule: undefined, balances: [], bills: [], asOf: today > last ? today : last });
+    setProfile({ ...DEMO_PROFILE, ownerName: account?.name || "You", businessName: account?.business || "Your business", age: 0, parentRule: undefined, priorYearTax: undefined, balances: [], bills: [], asOf: today > last ? today : last });
     setTxns(rows); enter("Your CSV upload");
   }
 
@@ -182,13 +184,13 @@ export default function App() {
   function notify(a: Alert) { setToast(a); window.setTimeout(() => setToast(null), 6500); }
   const clock = () => new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
 
-  function signOut() { setAccount(null); setTxns(null); setDraft({ name: "", email: "", business: "Pressure washing" }); home(); }
+  function signOut() { setAccount(null); setTxns(null); setDraft({ name: "", email: "", business: "Pressure washing", prior: "" }); setPriorYear(undefined); home(); }
 
   const veil = busy === "bank" || loadFail ? <LoadVeil failed={loadFail} onRetry={() => retryLoad.current()} onClose={() => { setLoadFail(false); window.setTimeout(() => lastFocus.current?.focus(), 0); }} /> : null;
   // While the veil is up, the page behind it cannot be focused or pressed. (React 18 passes inert through only as a string.)
   const hush: object = veil ? { inert: "" } : {};
   if (stage === "landing") return <><div {...hush}><Landing onStart={() => go("signup")} onSignIn={() => go("signup")} onDemo={() => loadSampleBank()} busy={busy === "bank"} /></div>{veil}</>;
-  if (stage === "signup") return <SignUp draft={draft} onDraft={setDraft} onBack={back} onHome={home} onDone={(a) => { setAccount({ ...a, plan: account?.plan }); go("pricing"); }} />;
+  if (stage === "signup") return <SignUp draft={draft} onDraft={setDraft} onBack={back} onHome={home} onDone={(a) => { setAccount({ ...a, plan: account?.plan }); setPriorYear(a.priorYearTax); go("pricing"); }} />;
   // Changing plan from inside the app goes straight back to the number; during setup the next step is still Connect.
   if (stage === "pricing") return <Pricing name={account?.name || "friend"} current={account?.plan} onBack={back} onHome={home} onPick={(plan) => { const toApp = planFromApp.current && !!txns; setAccount({ ...(account || { name: "", email: "", business: "" }), plan }); go(toApp ? "app" : "connect"); }} />;
   if (stage === "connect" || !txns || !result) return <><div {...hush}><Connect onBack={back} onHome={home} onPlaidSandbox={loadSampleBank} onQuickBooksSandbox={(bank) => loadSampleBank(bank, "qbo")} onPlaid={plaidFor(epoch.current)} onCsv={onCsv} busy={busy} error={error} /></div>{veil}</>;
@@ -229,7 +231,7 @@ export default function App() {
         {tab === "alerts" && <Alerts r={result} go={setTab} prefs={prefs} setPref={setPref} />}
         {tab === "settle" && <Settle r={result} />}
         {tab === "learn" && <Learn r={result} />}
-        {tab === "profile" && <Profile r={result} txns={txns} account={account} source={source} plan={PLAN_NAME[account?.plan || "free"]} onReconnect={() => go("connect")} onEditInfo={() => go("signup")} onChangePlan={() => go("pricing")} onSignOut={signOut} />}
+        {tab === "profile" && <Profile r={result} txns={txns} account={account} source={source} plan={PLAN_NAME[account?.plan || "free"]} onReconnect={() => go("connect")} onEditInfo={() => go("signup")} onChangePlan={() => go("pricing")} onSignOut={signOut} onPriorYear={setPriorYear} />}
         <p className="muted pb-4 pt-2 text-center text-xs">Data: {source}. Educational estimate, not tax advice.</p>
       </main>
 
@@ -313,7 +315,8 @@ function Home({ r, openLine, setWhy, txns, go, source }: { r: NumberResult; open
   const live = r.quarters.find((q) => q.status === "building");
   const owedRows = r.quarters.filter((q) => (q.status === "missed" || q.status === "locked" || q.status === "building") && q.remainingCents > 0);
   const payBy = live?.due ?? r.next.due;
-  const anyLate = owedRows.some((q) => q.status === "missed");
+  const exempt = r.priorYear === "no"; // V1: no estimated payments required, so nothing is "late"
+  const anyLate = !exempt && owedRows.some((q) => q.status === "missed");
   const effRate = r.netProfitCents > 0 ? r.fed.totalTaxCents / r.netProfitCents : 0; // one rate, same basis as the breakdown
   const per100 = Math.round(effRate * 100); // whole dollars of tax per $100 earned
   const taxLines = r.lines.filter((l) => l.key === "se" || l.key === "income" || l.key === "paid");
@@ -367,21 +370,22 @@ function Home({ r, openLine, setWhy, txns, go, source }: { r: NumberResult; open
       {/* grid-cols-1 + min-w-0: a long feed row must not widen the column past the phone screen */}
       <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div className="card flex min-w-0 flex-col p-6">
-          <div className="flex items-center justify-between gap-2"><Label icon={Lock}>1 · Pay by {fmtDate(payBy)}</Label><span className="rounded-full border border-zinc-700 px-2.5 py-0.5 text-[11px] text-zinc-300">estimated</span></div>
+          <div className="flex items-center justify-between gap-2"><Label icon={Lock}>{exempt ? `1 · Due with your ${TAX_YEAR} return` : `1 · Pay by ${fmtDate(payBy)}`}</Label><span className="rounded-full border border-zinc-700 px-2.5 py-0.5 text-[11px] text-zinc-300">estimated</span></div>
           <div className="font-display num mt-4 text-5xl font-semibold">{usd(r.owedSoFarCents)}</div>
-          <div className="mt-1 text-sm text-zinc-400">Next due date <b className="text-white">{fmtDate(payBy, true)}</b> · {dueIn(payBy, r.today)}</div>
+          <div className="mt-1 text-sm text-zinc-400">{exempt ? "Optional early payment by" : "Next due date"} <b className="text-white">{fmtDate(payBy, true)}</b> · {dueIn(payBy, r.today)}</div>
           <p className="muted mt-2 text-sm">Tax on money you've already earned. New income and costs show up in box 2.</p>
           {owedRows.length > 1 && (
             <ul className="mt-3 divide-y text-sm">
               {owedRows.map((q) => (
                 <li key={q.quarter} className="flex items-center justify-between gap-3 py-2">
                   <span className="text-zinc-300">{q.status === "building" ? `${q.covers.split(" – ")[0]} – ${r.asOf < r.today ? fmtDate(r.asOf) : "today"}` : q.covers}</span>
-                  <span className="flex items-center gap-2"><span className="num font-medium">{usd(q.remainingCents)}</span>{q.status === "missed" && <span className="flex items-center gap-1 rounded-full border border-zinc-700 px-2 py-0.5 text-[11px] text-zinc-300"><span className="dot !h-1.5 !w-1.5" style={{ background: "var(--red)" }} />late</span>}</span>
+                  <span className="flex items-center gap-2"><span className="num font-medium">{usd(q.remainingCents)}</span>{q.status === "missed" && !exempt && <span className="flex items-center gap-1 rounded-full border border-zinc-700 px-2 py-0.5 text-[11px] text-zinc-300"><span className="dot !h-1.5 !w-1.5" style={{ background: "var(--red)" }} />late</span>}</span>
                 </li>
               ))}
             </ul>
           )}
-          {anyLate && r.penalty.lateCount > 0 && <p className="muted mb-4 mt-3 text-xs" data-penalty={r.penalty.soFarCents}>Estimated late-payment penalty so far: <b className="text-zinc-300">{usd(r.penalty.soFarCents)}</b>. Each week adds about {usd(r.penalty.perWeekCents)} until the late parts are paid. Uses the Form 2210 method on these estimated amounts: late amount &times; days late &times; the IRS underpayment rate ({CURRENT_RATE_PCT}% a year now; 6% in Apr&ndash;Jun 2026). <PenaltySources /></p>}
+          {anyLate && r.penalty.lateCount > 0 && <p className="muted mb-4 mt-3 text-xs" data-penalty={r.penalty.soFarCents}>Estimated late-payment penalty so far: <b className="text-zinc-300">{usd(r.penalty.soFarCents)}</b>. Each week adds about {usd(r.penalty.perWeekCents)} until the late parts are paid. Uses the Form 2210 method on these estimated amounts: late amount &times; days late &times; the IRS underpayment rate ({CURRENT_RATE_PCT}% a year now; 6% in Apr&ndash;Jun 2026). <PenaltySources />{r.priorYear === "unknown" && <> No penalty applies if last year&apos;s return showed $0 total tax (a refund isn&apos;t $0 tax); you can answer in Profile.</>}</p>}
+          {exempt && <p className="muted mb-4 mt-3 text-xs" data-penalty="0">Estimated late-payment penalty: <b className="text-zinc-300">$0.00</b>. You said last year&apos;s total tax was $0, so estimated payments aren&apos;t required this year: this estimate is due with your {TAX_YEAR} return, and paying early is optional. (<a className="underline underline-offset-2 hover:text-white" href={PENALTY_SOURCES.exception.url} target="_blank" rel="noreferrer">{PENALTY_SOURCES.exception.title}</a>)</p>}
           <button className="btn btn-primary w-full" style={{ marginTop: "auto" }} onClick={() => go("settle")}>Settle this now <ArrowRight size={15} /></button>
         </div>
 
@@ -432,13 +436,14 @@ function Settle({ r }: { r: NumberResult }) {
       <div className="text-center">
         <h1 className="font-display mt-3 text-4xl font-semibold">Settle up</h1>
         <p className="muted mt-1">Pay the IRS without the maze.</p>
+        {r.priorYear === "no" && <p className="mx-auto mt-3 max-w-sm text-sm text-zinc-300">You said last year&apos;s total tax was $0, so estimated payments aren&apos;t required this year. This estimate is due with your {TAX_YEAR} return; paying some of it early is optional.</p>}
         <p className="mx-auto mt-3 max-w-sm text-xs leading-relaxed text-zinc-400">This is an estimate from your data &mdash; double-check the amount and your details on the IRS page before you pay. Educational estimate, not tax advice.</p>
       </div>
 
       <div className="card hero-glow p-7 text-center sm:p-8">
         <div className="muted text-xs font-medium uppercase tracking-[0.14em]">Estimated tax you owe</div>
         <div className="font-display num mt-1 text-6xl font-semibold leading-none">{amountFmt}</div>
-        <div className="muted mt-2 text-sm">Next due date {dueStr}</div>
+        <div className="muted mt-2 text-sm">{r.priorYear === "no" ? `Due with your ${TAX_YEAR} return; paying early is optional` : `Next due date ${dueStr}`}</div>
         <button className="btn btn-primary mt-6 w-full !rounded-xl !py-4 text-base" onClick={start}>
           Pay guided <ArrowRight size={16} />
         </button>
@@ -531,7 +536,7 @@ function PayAssist({ r, amountFmt, year, onClose }: { r: NumberResult; amountFmt
 
 /* ---------- Profile / settings ---------- */
 
-function Profile({ r, txns, account, source, plan, onReconnect, onEditInfo, onChangePlan, onSignOut }: { r: NumberResult; txns: Txn[]; account: Account | null; source: string; plan: string; onReconnect: () => void; onEditInfo: () => void; onChangePlan: () => void; onSignOut: () => void }) {
+function Profile({ r, txns, account, source, plan, onReconnect, onEditInfo, onChangePlan, onSignOut, onPriorYear }: { r: NumberResult; txns: Txn[]; account: Account | null; source: string; plan: string; onReconnect: () => void; onEditInfo: () => void; onChangePlan: () => void; onSignOut: () => void; onPriorYear: (v: "yes" | "no" | "unknown") => void }) {
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState("");
   const hasMonthlyTotals = txns.some(isQuickBooksMonthlyEntry);
@@ -566,6 +571,14 @@ function Profile({ r, txns, account, source, plan, onReconnect, onEditInfo, onCh
         <dl className="mt-5 grid gap-x-8 sm:grid-cols-2">
           {rows.map(([k, v]) => <div key={k} className="flex justify-between gap-4 border-b py-2 text-sm"><dt className="muted">{k}</dt><dd className="font-medium">{v}</dd></div>)}
         </dl>
+        {/* V1: editable answer; "No" turns off late periods and the penalty (IRS no-prior-year-tax exception). */}
+        <label className="mt-4 block text-sm font-medium" htmlFor="pf-prior">Did last year&apos;s tax return show any total tax?</label>
+        <select id="pf-prior" className="input mt-1.5" value={r.priorYear === "unknown" ? "" : r.priorYear} onChange={(e) => onPriorYear((e.target.value || "unknown") as "yes" | "no" | "unknown")}>
+          <option value="yes">Yes, some tax</option>
+          <option value="no">No: $0 total tax or no return needed (full year, U.S. citizen or resident)</option>
+          <option value="">Not sure</option>
+        </select>
+        <p className="mt-1 text-xs text-zinc-400">Check the &ldquo;total tax&rdquo; line on last year&apos;s Form 1040. A refund isn&apos;t $0 total tax.</p>
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <button className="btn btn-ghost" onClick={onEditInfo}>Edit my info</button>
           <button className="btn btn-ghost" onClick={onChangePlan}>Change plan</button>
@@ -687,7 +700,7 @@ function Breakdown({ r, source }: { r: NumberResult; source: string }) {
 function Alerts({ r, go, prefs, setPref }: { r: NumberResult; go: (t: Tab) => void; prefs: AlertPrefs; setPref: (k: string, v: boolean) => void }) {
   const color = { critical: "var(--red)", warning: "var(--amber)", info: "#ffffff" };
   const Icon = { critical: Octagon, warning: AlertTriangle, info: Bell };
-  const action = (id: string): [string, Tab] | null => id === "review" ? ["How estimated taxes work", "learn"] : id === "missed" || id === "next" ? ["How estimated taxes work", "learn"] : id === "below" ? ["See my jars", "home"] : id === "rule" ? ["Why it's wrong", "learn"] : null;
+  const action = (id: string): [string, Tab] | null => id === "review" ? ["How estimated taxes work", "learn"] : id === "missed" || id === "next" || id === "prior" ? ["How estimated taxes work", "learn"] : id === "below" ? ["See my jars", "home"] : id === "rule" ? ["Why it's wrong", "learn"] : null;
   const shown = r.alerts.filter((a) => a.id !== "below" && a.id !== "review");
   const [customs, setCustoms] = useState<{ id: string; text: string }[]>([]);
   const [adding, setAdding] = useState(false);

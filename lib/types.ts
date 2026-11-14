@@ -31,6 +31,8 @@ export interface Profile {
   state: string;
   parentRule?: { label: string; amountCents: number };
   asOf: string;
+  /** V1: did last year's return show any total tax? "no" = $0 total tax or no return required, a full 12-month year, U.S. citizen or resident all year. Unset = not answered. */
+  priorYearTax?: "yes" | "no";
   balances: AccountBalance[];
   bills: Bill[];
 }

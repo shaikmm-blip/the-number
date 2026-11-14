@@ -129,3 +129,34 @@ describe("V3: what the next $100 of profit adds", () => {
     expect(nextProfitTaxCents(p)).toBe(1_412);
   });
 });
+
+describe("V1: did last year's return show any total tax?", () => {
+  const txns = () => scaleBusiness(load(), DEMO_FACTOR);
+  it("sample answers yes: late periods, the missed-payment alert and the penalty stay as before", () => {
+    const r = computeNumber(txns(), DEMO_PROFILE, "2026-11-13");
+    expect(r.priorYear).toBe("yes");
+    expect(r.owedSoFarCents).toBe(528_102);
+    expect(r.penalty.soFarCents).toBe(5_996);
+    expect(r.penalty.exempt).toBeUndefined();
+    expect(r.alerts.some((a) => a.id === "missed")).toBe(true);
+    expect(r.missed.map((m) => m.quarter)).toEqual(["Q1", "Q2", "Q3"]);
+  });
+  it("no prior-year tax: same estimate, no late periods called penalties, $0 penalty, payments not required", () => {
+    const r = computeNumber(txns(), { ...DEMO_PROFILE, priorYearTax: "no" }, "2026-11-13");
+    expect(r.priorYear).toBe("no");
+    expect(r.owedSoFarCents).toBe(528_102); // what is owed doesn't change, only whether it is late
+    expect(r.penalty).toEqual({ soFarCents: 0, perWeekCents: 0, lateCount: 0, exempt: true });
+    expect(r.alerts.some((a) => a.id === "missed")).toBe(false);
+    expect(r.missed).toEqual([]);
+    const prior = r.alerts.find((a) => a.id === "prior")!;
+    expect(prior.title).toMatch(/aren't required/);
+    expect(prior.body).toMatch(/due with your 2026 return/);
+    expect(prior.body).toMatch(/optional/);
+  });
+  it("not answered: today's behavior (penalty shown), flagged as unknown", () => {
+    const r = computeNumber(txns(), { ...DEMO_PROFILE, priorYearTax: undefined }, "2026-11-13");
+    expect(r.priorYear).toBe("unknown");
+    expect(r.penalty.soFarCents).toBe(5_996);
+    expect(r.alerts.some((a) => a.id === "prior")).toBe(false);
+  });
+});

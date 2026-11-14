@@ -18,6 +18,8 @@ export const CURRENT_RATE_PCT = 7;
 export const PENALTY_SOURCES = {
   method: { title: "IRS: Instructions for Form 2210", url: "https://www.irs.gov/instructions/i2210" },
   rates: { title: "IRS: Quarterly interest rates", url: "https://www.irs.gov/payments/quarterly-interest-rates" },
+  // V1: the no-prior-year-tax exception.
+  exception: { title: "IRS: Estimated tax penalty questions", url: "https://www.irs.gov/faqs/estimated-tax/penalty-questions/penalty-questions" },
 };
 
 const dayNum = (iso: string) => Math.round(Date.parse(iso + "T00:00:00Z") / 86_400_000);
@@ -37,7 +39,7 @@ export function latePenalty(amountCents: number, due: string, asOf: string) {
 
 const addDays = (iso: string, n: number) => new Date(Date.parse(iso + "T00:00:00Z") + n * 86_400_000).toISOString().slice(0, 10);
 
-export interface PenaltySummary { soFarCents: number; perWeekCents: number; lateCount: number }
+export interface PenaltySummary { soFarCents: number; perWeekCents: number; lateCount: number; /** V1: no prior-year tax, so no penalty applies */ exempt?: boolean }
 
 /** Estimated penalty so far on every late, unpaid period, and what one more week adds if nothing is paid. */
 export function penaltySummary(quarters: Quarter[], today: string): PenaltySummary {

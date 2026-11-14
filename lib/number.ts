@@ -86,6 +86,8 @@ export interface NumberResult {
   topCategories: { category: string; amountCents: number }[];
   alerts: Alert[];
   quarters: Quarter[];
+  /** V1: the answer to "did you have total tax last year?" */
+  priorYear: "yes" | "no" | "unknown";
   /** V4: estimated late-payment penalty on the late, unpaid periods (Form 2210 method). */
   penalty: PenaltySummary;
 }
@@ -117,7 +119,9 @@ export function computeNumber(txns: Txn[], profile: Profile, today = profile.asO
   const safe = balance - theNumber;
 
   const upcoming = TAX_2026.quarterlyDueDates.find((q) => q.due >= today) ?? TAX_2026.quarterlyDueDates[3];
-  const missed = paid === 0 ? TAX_2026.quarterlyDueDates.filter((q) => q.due < asOf).map((q) => ({ quarter: q.quarter, due: q.due })) : [];
+  const priorYear = profile.priorYearTax ?? "unknown";
+  const exempt = priorYear === "no"; // V1: no prior-year tax liability, so estimated payments aren't required and no penalty applies
+  const missed = paid === 0 && !exempt ? TAX_2026.quarterlyDueDates.filter((q) => q.due < asOf).map((q) => ({ quarter: q.quarter, due: q.due })) : [];
   const daysLeft = daysBetween(today, upcoming.due); // negative once the last due date has passed; shown through dueIn()
   const monthsToDue = Math.max(1, Math.ceil(daysLeft / 30));
   const saveThisMonth = Math.round(owed / monthsToDue);
@@ -151,10 +155,11 @@ export function computeNumber(txns: Txn[], profile: Profile, today = profile.asO
   const quarters = quarterBreakdown(txns, asOf, paid);
   const missedQ = quarters.filter((q) => q.status === "missed" && q.remainingCents > 0);
   const building = quarters.find((q) => q.status === "building");
-  const penalty = penaltySummary(quarters, today);
+  const penalty: PenaltySummary = exempt ? { soFarCents: 0, perWeekCents: 0, lateCount: 0, exempt: true } : penaltySummary(quarters, today);
   const alerts: Alert[] = [];
   if (safe < 0) alerts.push({ id: "below", level: "critical", title: `You're ${formatUSD(-safe)} below your Number`, body: `You have ${formatUSD(balance)} across your accounts, but ${formatUSD(theNumber)} of it is already spoken for. Hold off on big purchases until you're back above it.` });
-  if (missedQ.length) alerts.push({ id: "missed", level: "warning", title: `${missedQ.length} estimated tax payment${missedQ.length > 1 ? "s" : ""} missed: ${formatUSD(missedQ.reduce((s, q) => s + q.remainingCents, 0))}`, body: `Estimated ${missedQ.map((q) => `${formatUSD(q.remainingCents)} for the period due ${q.due}`).join(", ")}. Those periods have ended. The IRS adds a penalty for each day a payment is late: an estimated ${formatUSD(penalty.soFarCents, { cents: true })} so far, growing about ${formatUSD(penalty.perWeekCents, { cents: true })} a week at its ${CURRENT_RATE_PCT}% underpayment rate. Paying at irs.gov/payments stops it growing.` });
+  if (exempt) alerts.push({ id: "prior", level: "info", title: "Estimated payments aren't required this year", body: `You said your total tax last year was $0 (or you didn't have to file), for a full 12-month year as a U.S. citizen or resident. Then the IRS doesn't require estimated payments this year and doesn't charge the estimated-tax penalty. This estimate is due with your ${TAX_YEAR} return; paying some of it early is optional.` });
+  if (missedQ.length && !exempt) alerts.push({ id: "missed", level: "warning", title: `${missedQ.length} estimated tax payment${missedQ.length > 1 ? "s" : ""} missed: ${formatUSD(missedQ.reduce((s, q) => s + q.remainingCents, 0))}`, body: `Estimated ${missedQ.map((q) => `${formatUSD(q.remainingCents)} for the period due ${q.due}`).join(", ")}. Those periods have ended. The IRS adds a penalty for each day a payment is late: an estimated ${formatUSD(penalty.soFarCents, { cents: true })} so far, growing about ${formatUSD(penalty.perWeekCents, { cents: true })} a week at its ${CURRENT_RATE_PCT}% underpayment rate. Paying at irs.gov/payments stops it growing.` });
   if (building) alerts.push({ id: "next", level: "info", title: `Estimated payment for this period: ${formatUSD(building.remainingCents)}, due ${building.due} (${dueIn(building.due, today)})`, body: building.due < today ? `Its due date has passed. It covers ${building.covers}.` : `This one is still open. It covers ${building.covers}, and it changes as income, costs and payments come in until the period ends.` });
   if (reviewCount) alerts.push({ id: "review", level: "info", title: `${reviewCount} payments need a quick answer`, body: `Tell us business or personal. Payment apps expect business money on a business profile, so sorting these keeps you legit.` });
   if (profile.parentRule && owed > profile.parentRule.amountCents) alerts.push({ id: "rule", level: "warning", title: `${profile.parentRule.label} is wrong`, body: `You're under the limit for income tax, but you still owe an estimated ${formatUSD(owed)}, mostly self-employment tax. It starts at $400 of profit, at any age.` });
@@ -164,6 +169,6 @@ export function computeNumber(txns: Txn[], profile: Profile, today = profile.asO
     taxPaidCents: paid, owedSoFarCents: owed, cushionCents: cushion, billsCents: bills, theNumberCents: theNumber,
     balanceCents: balance, safeToSpendCents: safe, saveThisMonthCents: saveThisMonth,
     next: { quarter: upcoming.quarter, due: upcoming.due, daysLeft, amountCents: owed }, missed,
-    lines, monthly, topCategories, alerts, quarters, penalty,
+    lines, monthly, topCategories, alerts, quarters, penalty, priorYear,
   };
 }
