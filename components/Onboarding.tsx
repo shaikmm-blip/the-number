@@ -80,8 +80,8 @@ export function Landing({ onStart, onDemo, onSignIn, busy }: { onStart: () => vo
             </div>
           </div>
           <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-400 sm:text-left">
-            <a className="underline-offset-2 hover:underline" href="https://www.irs.gov/statistics/collections-activities-penalties-and-appeals" target="_blank" rel="noreferrer" title="Table 4-2: estimated tax penalties assessed on individual, estate and trust income tax returns, fiscal year 2025">IRS Data Book FY2025, Table 4-2</a>
-            <a className="underline-offset-2 hover:underline" href="https://sbecouncil.org/2026/10/31/americas-entrepreneurship-surge-continues-nearly-5-million-business-applications-filed-through-september/" target="_blank" rel="noreferrer">SBE Council, from Census Business Formation Statistics, Jan–Sep 2026</a>
+            <a className="underline-offset-2 hover:underline" href="https://www.irs.gov/statistics/collections-activities-penalties-and-appeals" target="_blank" rel="noreferrer" title="Table 4-2: estimated tax penalties assessed on individual, estate and trust income tax returns, fiscal year 2025">IRS Data Book FY2025, Table 4-2 (individual, estate and trust returns)</a>
+            <a className="underline-offset-2 hover:underline" href="https://sbecouncil.org/2026/10/31/americas-entrepreneurship-surge-continues-nearly-5-million-business-applications-filed-through-september/" target="_blank" rel="noreferrer" title="SBE Council, from U.S. Census Business Formation Statistics, January–September 2026">SBE Council (Census data)</a>
             <a className="underline-offset-2 hover:underline" href="https://american.edu/media/news/20230418_CarolineBrucknerTaxLiteracySurvey.cfm" target="_blank" rel="noreferrer">American University Kogod, Small Business Tax Literacy Survey</a>
           </div>
         </div>
