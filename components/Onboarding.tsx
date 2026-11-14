@@ -75,13 +75,13 @@ export function Landing({ onStart, onDemo, onSignIn, busy }: { onStart: () => vo
           <div className="flex flex-col items-center gap-2 sm:flex-row sm:gap-6 sm:text-left">
             <div className="font-display num shrink-0 text-[clamp(3.5rem,9vw,5.5rem)] font-semibold leading-none">15.7M</div>
             <div>
-              <div className="text-lg font-semibold leading-snug">IRS penalties last year for unpaid quarterly taxes.</div>
-              <div className="muted mt-1 text-sm">This year a record <b className="text-white">4.9 million</b> Americans started a business, and with <b className="text-white">1 in 3</b> owners not even knowing they owe the IRS every quarter, that's <b className="text-white">1.6 million</b> new owners headed for a bill they never saw coming.</div>
+              <div className="text-lg font-semibold leading-snug">IRS estimated-tax penalties assessed in fiscal 2025.</div>
+              <div className="muted mt-1 text-sm">Americans filed about <b className="text-white">4.9 million</b> new business applications in Jan–Sep 2026, and in one survey about <b className="text-white">1 in 3</b> small businesses and gig workers didn&apos;t know if they had to pay estimated tax.</div>
             </div>
           </div>
           <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-400 sm:text-left">
-            <a className="underline-offset-2 hover:underline" href="https://galek.tax/insights/data-analysis/irs-penalty-trends" target="_blank" rel="noreferrer">IRS Data Book FY2025</a>
-            <a className="underline-offset-2 hover:underline" href="https://sbecouncil.org/2026/10/31/americas-entrepreneurship-surge-continues-nearly-5-million-business-applications-filed-through-september/" target="_blank" rel="noreferrer">Source: U.S. Census Business Formation Statistics, Jan–Sep 2026</a>
+            <a className="underline-offset-2 hover:underline" href="https://www.irs.gov/statistics/collections-activities-penalties-and-appeals" target="_blank" rel="noreferrer" title="Table 4-2: estimated tax penalties assessed on individual, estate and trust income tax returns, fiscal year 2025">IRS Data Book FY2025, Table 4-2</a>
+            <a className="underline-offset-2 hover:underline" href="https://sbecouncil.org/2026/10/31/americas-entrepreneurship-surge-continues-nearly-5-million-business-applications-filed-through-september/" target="_blank" rel="noreferrer">SBE Council, from Census Business Formation Statistics, Jan–Sep 2026</a>
             <a className="underline-offset-2 hover:underline" href="https://american.edu/media/news/20230418_CarolineBrucknerTaxLiteracySurvey.cfm" target="_blank" rel="noreferrer">American University Kogod, Small Business Tax Literacy Survey</a>
           </div>
         </div>
