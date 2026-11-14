@@ -63,6 +63,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 /* Landing: grid + horizon glow */
 .grid-bg { background-image: linear-gradient(rgba(255,255,255,.045) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.045) 1px, transparent 1px); background-size: 120px 100px; mask-image: radial-gradient(ellipse 80% 70% at 50% 35%, #000 40%, transparent 85%); }
 .headline { background: linear-gradient(180deg, #ffffff 30%, #9a9a9e 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+/* L1: the landing headline's last phrase in brand green; its own fill paints over the parent's clipped gradient. */
+.headline-accent { color: var(--green); -webkit-text-fill-color: var(--green); }
+/* L1: a soft green halo around the landing's white Get Started button. */
+.btn-halo { box-shadow: 0 0 0 5px color-mix(in srgb, var(--green) 16%, transparent), 0 0 36px color-mix(in srgb, var(--green) 32%, transparent); }
 .horizon { position: absolute; left: 50%; bottom: -62vw; width: 140vw; height: 80vw; transform: translateX(-50%); border-radius: 50%; background: radial-gradient(closest-side, #000 92%, transparent 100%); box-shadow: 0 -2px 0 rgba(255,255,255,.85), 0 -30px 90px rgba(255,255,255,.35), 0 -80px 220px rgba(255,255,255,.18); }
 
 @keyframes rise { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }

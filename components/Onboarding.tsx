@@ -67,7 +67,7 @@ export function Landing({ onStart, onDemo, onSignIn, busy }: { onStart: () => vo
 
       <main className="relative z-10 mx-auto flex w-full max-w-4xl flex-1 flex-col items-center justify-center px-4 pb-8 text-center">
         <span className="chip rise mb-4 uppercase tracking-[0.14em] text-zinc-300">For first-time business owners</span>
-        <h1 className="headline font-display rise text-[clamp(2.4rem,6vw,4.5rem)] font-semibold leading-[1]" style={{ textWrap: "balance" as never }}>Know how much you owe.</h1>
+        <h1 className="headline font-display rise text-[clamp(2.4rem,6vw,4.5rem)] font-semibold leading-[1]" style={{ textWrap: "balance" as never }}>Know how much <span className="headline-accent">you owe.</span></h1>
         <p className="rise mt-4 max-w-2xl text-[clamp(1.15rem,2.4vw,1.55rem)] font-medium leading-snug text-white" style={{ textWrap: "balance" as never }}>
           See an estimate of what you owe the IRS, and when it&apos;s due. Built for first-time business owners.
         </p>
@@ -86,7 +86,7 @@ export function Landing({ onStart, onDemo, onSignIn, busy }: { onStart: () => vo
           </div>
         </div>
         <div className="rise mt-7 flex flex-col items-center gap-3">
-          <button className="btn btn-primary min-w-[220px] !rounded-xl !py-3.5 text-base" onClick={onStart}>Get Started <ArrowRight size={16} /></button>
+          <button className="btn btn-primary btn-halo min-w-[220px] !rounded-xl !py-3.5 text-base" onClick={onStart}>Get Started <ArrowRight size={16} /></button>
           <span className="text-xs text-zinc-400">Connects with your bank through Plaid, and with QuickBooks</span>
           <button className="inline-flex items-center gap-2 text-sm text-zinc-400 underline-offset-4 hover:text-white hover:underline" onClick={onDemo} disabled={busy} aria-busy={busy || undefined}>{busy ? <><Loader2 size={14} className="animate-spin motion-reduce:animate-none" aria-hidden />Loading a live example…</> : "or see a live example first"}</button>
         </div>
