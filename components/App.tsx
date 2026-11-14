@@ -90,7 +90,7 @@ export default function App() {
     if (q !== "connected") { setError("QuickBooks wasn't connected. Try again."); setStage("connect"); return; }
     setStage("connect"); setBusy("qbo");
     const seq = ++loadSeq.current;
-    fetch("/api/qbo/data").then(async (r) => {
+    fetch(`/api/qbo/data?today=${localToday()}`).then(async (r) => {
       const j = await r.json();
       if (!r.ok) throw new Error(j.error);
       if (loadSeq.current !== seq) return; // superseded (e.g. a CSV was used meanwhile)
@@ -100,7 +100,16 @@ export default function App() {
     }).catch((e) => { if (loadSeq.current === seq) setError((e as Error).message); }).finally(() => { if (loadSeq.current === seq) setBusy(""); });
   }, []);
   useEffect(() => { window.scrollTo(0, 0); }, [stage, tab]);
-  const result = useMemo(() => (txns ? computeNumber(txns, profile, localToday()) : null), [txns, profile]);
+  // V5: the viewer's calendar date, refreshed at local midnight and whenever the tab comes back, so an open dashboard never shows yesterday's count.
+  const [today, setToday] = useState(localToday);
+  useEffect(() => {
+    let timer = 0;
+    const tick = () => { setToday(localToday()); const n = new Date(); timer = window.setTimeout(tick, new Date(n.getFullYear(), n.getMonth(), n.getDate() + 1, 0, 0, 1).getTime() - n.getTime()); };
+    const wake = () => setToday(localToday());
+    tick(); document.addEventListener("visibilitychange", wake); window.addEventListener("focus", wake);
+    return () => { window.clearTimeout(timer); document.removeEventListener("visibilitychange", wake); window.removeEventListener("focus", wake); };
+  }, []);
+  const result = useMemo(() => (txns ? computeNumber(txns, profile, today) : null), [txns, profile, today]);
 
   function enter(note: string) { loadSeq.current++; epoch.current++; setBusy(""); setLoadFail(false); setSource(note); setTab("home"); go("app"); }
 
@@ -300,7 +309,7 @@ function Label({ children, icon: I }: { children: React.ReactNode; icon?: typeof
 function Home({ r, openLine, setWhy, txns, go, source }: { r: NumberResult; openLine: (l: Line) => void; setWhy: (w: Why) => void; txns: Txn[]; go: (t: Tab) => void; source: string }) {
   const shown = useCountUp(r.owedSoFarCents);
   const usd = (c: number) => formatUSD(c, { cents: true });
-  const fmtDate = (iso: string, year = false) => new Date(iso + "T12:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", ...(year ? { year: "numeric" } : {}) });
+  const fmtDate = (iso: string, year = false) => new Date(iso + "T12:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC", ...(year ? { year: "numeric" } : {}) });
   const live = r.quarters.find((q) => q.status === "building");
   const owedRows = r.quarters.filter((q) => (q.status === "missed" || q.status === "locked" || q.status === "building") && q.remainingCents > 0);
   const payBy = live?.due ?? r.next.due;
@@ -379,7 +388,7 @@ function Home({ r, openLine, setWhy, txns, go, source }: { r: NumberResult; open
         <div className="card hero-glow flex min-w-0 flex-col p-6">
           <div className="flex items-center justify-between gap-2"><Label icon={CalendarClock}>2 · New income and costs</Label><span className="flex items-center gap-1.5 text-xs text-zinc-400"><span className="dot live-dot" style={{ background: "var(--green)" }} />live</span></div>
           <div className="mt-4 font-display num text-4xl font-semibold transition-colors duration-500" style={{ color: flash === "in" ? "var(--green)" : flash === "out" ? "var(--red)" : undefined }}>{newTaxShown < 0 ? "−" : "+"}{usd(Math.abs(newTaxShown))}</div>
-          <div className="mt-1 text-sm text-zinc-400">Estimated extra tax on new income and costs from now through <b className="text-white">{live ? fmtDate(live.end, true) : fmtDate(payBy, true)}</b>{live && <> &mdash; {periodLeft(live.end, r.today)}</>}.</div>
+          <div className="mt-1 text-sm text-zinc-400">Estimated extra tax on new income and costs from now{live && periodLeft(live.end, r.today) === "ended" ? null : <> through <b className="text-white">{live ? fmtDate(live.end, true) : fmtDate(payBy, true)}</b>{live && <> &mdash; {periodLeft(live.end, r.today)}</>}</>}.</div>
           <p className="muted mt-2 text-sm">Simple rule: set aside about <b className="text-white">${per100}</b> of every <b className="text-white">$100</b> you make.</p>
           <ul className="mt-4 flex-1 space-y-2 text-sm" aria-live="polite">
             {feed.length === 0 && <li className="muted flex items-center gap-2 text-sm"><span className="dot live-dot" style={{ background: "var(--green)" }} />Waiting for new income and costs…</li>}
