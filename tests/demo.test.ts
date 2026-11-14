@@ -102,13 +102,14 @@ describe("V5: day counts use the viewer's real date", () => {
     expect(periodLeft("2026-12-31", "2027-01-16")).toBe("ended");
     const next = r.alerts.find((a) => a.id === "next")!;
     expect(next.title).toContain("1 day overdue");
-    expect(next.body).not.toMatch(/still open/); // an overdue period is not described as open
+    expect(next.body).not.toMatch(/changes as money comes in/); // an overdue period is not described as open
+    expect(next.body).toMatch(/^Its due date has passed/);
     const onTime = computeNumber(scaleBusiness(load(), DEMO_FACTOR), DEMO_PROFILE, "2026-11-13").alerts.find((a) => a.id === "next")!;
-    expect(onTime.body).toMatch(/still open/);
+    expect(onTime.body).toMatch(/changes as money comes in until the period ends/);
     // Jan 1-15, 2027: the period ended Dec 31 but its payment isn't due yet
     const jan1 = computeNumber(scaleBusiness(load(), DEMO_FACTOR), DEMO_PROFILE, "2027-01-01").alerts.find((a) => a.id === "next")!;
-    expect(jan1.body).not.toMatch(/still open/);
-    expect(jan1.body).toMatch(/has ended; its payment is due 2027-01-15/);
+    expect(jan1.body).not.toMatch(/changes as money comes in/);
+    expect(jan1.body).toMatch(/has ended and covers .*; its payment is due Jan 15/);
     expect(jan1.title).toContain("14 days from now");
   });
   it("uses the local calendar date, not the UTC date", () => {
@@ -192,7 +193,7 @@ describe("V1/V4 follow-up: the exemption reaches every surface; the penalty copy
     const r = computeNumber(txns(), DEMO_PROFILE, "2026-11-13");
     const body = r.alerts.find((a) => a.id === "missed")!.body;
     expect(body).toMatch(/On these amounts/);
-    expect(body).toMatch(/required payment, which can differ/);
+    expect(body).toMatch(/an illustration: the IRS figures the real penalty from each period's required payment/);
     expect(body).not.toMatch(/avoids it|stops it growing|The IRS adds/);
     expect(body).not.toMatch(/assumed/); // Nov 13: no 2027 days counted
   });
@@ -247,7 +248,30 @@ describe("V2 fallback follow-up: Yes qualifies every income-tax surface", () => 
 describe("V2 fallback follow-up 2: payment alerts carry the wages note", () => {
   it("missed and open-period alerts say wages aren't included when the answer is Yes", () => {
     const r = computeNumber(scaleBusiness(load(), DEMO_FACTOR), { ...DEMO_PROFILE, paycheck: "yes" }, "2026-11-13");
-    for (const id of ["missed", "next"]) expect(r.alerts.find((a) => a.id === id)!.body).toMatch(/paycheck wages are not included, so the amount can be higher/);
+    for (const id of ["missed", "next"]) expect(r.alerts.find((a) => a.id === id)!.body).toMatch(/your paycheck wages aren't included, so it can be higher/);
     expect(formGuide(r).flatMap((s) => s.rows).find((x) => x.id === "taxable")!.where).toMatch(/can be higher/);
+  });
+});
+
+describe("Owner follow-up (Nov 14): alert explanations are one sentence, two at most", () => {
+  const sentences = (t: string) => t.replace(/U\.S\./g, "US").replace(/\$[\d,]+\.\d{2}/g, "$X").replace(/\d\.\d/g, "N").split(/[.!?](?:\s|$)/).filter((x) => x.trim()).length;
+  const cases: [string, Parameters<typeof computeNumber>[1], string][] = [
+    ["sample, Nov 13", DEMO_PROFILE, "2026-11-13"],
+    ["sample, Jan 1 2027", DEMO_PROFILE, "2027-01-01"],
+    ["sample, Jan 16 2027", DEMO_PROFILE, "2027-01-16"],
+    ["sample, no tax last year", { ...DEMO_PROFILE, priorYearTax: "no" }, "2026-11-13"],
+    ["sample with a paycheck", { ...DEMO_PROFILE, paycheck: "yes" }, "2026-11-13"],
+  ];
+  for (const [name, profile, today] of cases) it(name, () => {
+    const r = computeNumber(scaleBusiness(load(), DEMO_FACTOR), profile, today);
+    for (const a of r.alerts) expect(sentences(a.body), `${a.id}: ${a.body}`).toBeLessThanOrEqual(2);
+  });
+  it("the parent-rule alert no longer says the sample is under the income-tax limit", () => {
+    const r = computeNumber(scaleBusiness(load(), DEMO_FACTOR), DEMO_PROFILE, "2026-11-13");
+    const rule = r.alerts.find((a) => a.id === "rule")!;
+    expect(r.fed.incomeTaxCents).toBe(97_682);
+    expect(rule.body).not.toMatch(/under the limit/);
+    expect(rule.body).toMatch(/Your profit \(\$30,462\) is over the \$16,100 standard deduction, so income tax applies/);
+    expect(rule.body).toMatch(/92\.35% of your profit reaches \$400, at any age/);
   });
 });

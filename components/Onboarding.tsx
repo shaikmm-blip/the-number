@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, Check, Loader2, Moon, Sun, Landmark, Lock, ShieldCheck, Timer } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Loader2, Moon, Sun, Landmark, Lock, ShieldCheck, Timer, User } from "lucide-react";
 import type { Kind, Profile, Txn } from "@/lib/types";
 import { MAX_FILE_BYTES, readUploads, type UploadPreview } from "@/lib/upload";
 import { parseTypedAmount, type TypedTotals } from "@/lib/entry";
+import { PLANS, dollars, fullPriceCents, perMonthCents, periodCents } from "@/lib/plans";
 import { TAX_YEAR } from "@/lib/taxConfig";
 import { PlaidButton } from "./PlaidButton";
 
@@ -235,22 +236,21 @@ function Shell({ children, step, onBack, onHome }: { children: React.ReactNode; 
 
 /* ---------------- Sign up ---------------- */
 
-export type Account = { name: string; email: string; business: string; plan?: string; priorYearTax?: "yes" | "no"; paycheck?: "yes" | "no" };
+export type Account = { name: string; email: string; business: string; plan?: string };
 
-type Draft = { name: string; email: string; business: string; prior: "" | "yes" | "no"; paycheck: "" | "yes" | "no" };
+type Draft = { name: string; email: string; business: string };
 
 export function SignUp({ onDone, onBack, onHome, draft, onDraft }: { onDone: (a: Account) => void; onBack: () => void; onHome: () => void; draft: Draft; onDraft: (d: Draft) => void }) {
   // What was typed is kept by the parent, so coming Back to this step shows it again.
   const [name, setName] = useState(draft.name), [email, setEmail] = useState(draft.email), [business, setBusiness] = useState(draft.business);
-  const [prior, setPrior] = useState(draft.prior), [paycheck, setPaycheck] = useState(draft.paycheck);
-  useEffect(() => { onDraft({ name, email, business, prior, paycheck }); }, [name, email, business, prior, paycheck, onDraft]);
+  useEffect(() => { onDraft({ name, email, business }); }, [name, email, business, onDraft]);
   const [err, setErr] = useState("");
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return setErr("Add your first name so we know what to call you.");
     if (!/^\S+@\S+\.\S+$/.test(email)) return setErr("That email doesn't look right. Check for a typo.");
     if (!business.trim()) return setErr("Tell us what your business does, in your own words.");
-    onDone({ name: name.trim().split(" ")[0], email: email.trim(), business: business.trim(), priorYearTax: prior || undefined, paycheck: paycheck || undefined });
+    onDone({ name: name.trim().split(" ")[0], email: email.trim(), business: business.trim() });
   };
   return (
     <Shell step={0} onBack={onBack} onHome={onHome}>
@@ -266,10 +266,11 @@ export function SignUp({ onDone, onBack, onHome, draft, onDraft }: { onDone: (a:
         </div>
         <form onSubmit={submit} className="glass rise mx-auto w-full max-w-md p-7 sm:p-9" noValidate>
           <h2 className="font-display text-3xl font-semibold">Create your account</h2>
-          <p className="mt-1 text-sm text-zinc-400">Takes 20 seconds. No card needed.</p>
-          <button type="button" onClick={() => onDone({ name: "Jay", email: "jay@example.com", business: "Pressure washing", priorYearTax: prior || undefined, paycheck: paycheck || undefined })} className="btn btn-ghost mt-6 w-full !rounded-xl">
-            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden><path fill="#fff" d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.7 3-4.3 3-7.3Z"/><path fill="#bbb" d="M12 22c2.7 0 5-.9 6.6-2.4l-3.2-2.5c-.9.6-2 1-3.4 1-2.6 0-4.8-1.8-5.6-4.1H3.1v2.6A10 10 0 0 0 12 22Z"/><path fill="#888" d="M6.4 14c-.2-.6-.3-1.3-.3-2s.1-1.4.3-2V7.4H3.1a10 10 0 0 0 0 9.2L6.4 14Z"/><path fill="#ddd" d="M12 6c1.5 0 2.8.5 3.8 1.5l2.9-2.9A10 10 0 0 0 3.1 7.4L6.4 10C7.2 7.7 9.4 6 12 6Z"/></svg>
-            Continue with Google (demo)
+          <p className="mt-1 text-sm text-zinc-400">Takes 20 seconds.</p>
+          {/* Fills in a fictional sample account (Jay). Not a Google or any other real sign-in. */}
+          <button type="button" onClick={() => onDone({ name: "Jay", email: "jay@example.com", business: "Pressure washing" })} className="btn btn-ghost mt-6 w-full !rounded-xl">
+            <User size={18} aria-hidden />
+            Use a sample account
           </button>
           <div className="my-6 flex items-center gap-3 text-xs text-zinc-400"><span className="h-px flex-1 bg-zinc-800" />or<span className="h-px flex-1 bg-zinc-800" /></div>
           <label className="block text-sm font-medium" htmlFor="su-name">First name</label>
@@ -278,73 +279,51 @@ export function SignUp({ onDone, onBack, onHome, draft, onDraft }: { onDone: (a:
           <input id="su-email" className="input mt-1.5" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@email.com" type="email" autoComplete="email" />
           <label className="mt-4 block text-sm font-medium" htmlFor="su-biz">What's your business?</label>
           <input id="su-biz" className="input mt-1.5" value={business} onChange={(e) => setBusiness(e.target.value)} placeholder="Pressure washing, lawn care, reselling…" />
-          {/* V1: asked once; editable in Profile. A refund is not zero tax, so it asks about total tax. */}
-          <fieldset className="mt-4">
-            <legend className="text-sm font-medium">Did last year&apos;s tax return show any total tax?</legend>
-            <p className="mt-1 text-xs text-zinc-400">Check the &ldquo;total tax&rdquo; line on your Form 1040. Getting a refund isn&apos;t the same as $0 total tax.</p>
-            <div className="mt-2 grid gap-2">
-              {([["yes", "Yes, some tax"], ["no", "No: $0 total tax or no return needed, for a full 12-month tax year as a U.S. citizen or resident all year"], ["", "Not sure (skip for now)"]] as const).map(([v, l]) => (
-                <label key={v || "skip"} className={`flex cursor-pointer items-start gap-2.5 rounded-xl border px-3 py-2.5 text-sm has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-white ${prior === v ? "border-white" : "border-zinc-800"}`}>
-                  <input type="radio" name="su-prior" value={v} checked={prior === v} onChange={() => setPrior(v)} className="mt-0.5 accent-white" />{l}
-                </label>
-              ))}
-            </div>
-          </fieldset>
-          {/* V2 (fallback): a paycheck raises the income tax on the business; wages aren't modeled yet, so "Yes" shows how much higher. */}
-          <fieldset className="mt-4">
-            <legend className="text-sm font-medium">Do you also have a paycheck job this year?</legend>
-            <div className="mt-2 grid grid-cols-2 gap-2">
-              {([["no", "No"], ["yes", "Yes"]] as const).map(([v, l]) => (
-                <label key={v} className={`flex cursor-pointer items-center gap-2.5 rounded-xl border px-3 py-2.5 text-sm has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-white ${paycheck === v ? "border-white" : "border-zinc-800"}`}>
-                  <input type="radio" name="su-paycheck" value={v} checked={paycheck === v} onChange={() => setPaycheck(v)} className="accent-white" />{l}
-                </label>
-              ))}
-            </div>
-          </fieldset>
           {err && <p className="mt-3 text-sm" style={{ color: "var(--red)" }}>{err}</p>}
           <button className="btn btn-primary mt-6 w-full !rounded-xl !py-3.5">Create account <ArrowRight size={16} /></button>
-          <p className="mt-4 text-center text-xs text-zinc-400">Hackathon demo: nothing is saved. Reloading starts over.</p>
         </form>
       </div>
     </Shell>
   );
 }
 
-/* ---------------- Pricing (no subscriptions) ---------------- */
+/* ---------------- Pricing: $10 a month, or 5% off quarterly, 10% off yearly (lib/plans.ts) ---------------- */
 
 const FEATURES = ["An estimate of what you owe the IRS, from your own transactions", "Connect your bank (Plaid) or QuickBooks", "Type in cash jobs and see your tax update", "Due-date and late-payment alerts", "Business-or-personal sorting", "Built for sole proprietors (Schedule C)", "CPA-ready export at tax time"];
-const PLANS = [
-  { id: "trial", name: "Free trial", blurb: "Try everything for 30 days.", price: "$0", unit: "30 days · no card needed", cta: "Start free trial", note: "Ends on its own. We never charge you automatically." },
-  { id: "season", name: "Season Pass", blurb: "One payment covers the whole tax year.", price: "$120", unit: "one-time · per tax year", popular: true, cta: "Start now", note: "No auto-renew. If it doesn't save you more than it costs, next season is on us." },
-];
 
 export function Pricing({ onPick, onBack, onHome, current }: { name?: string; current?: string; onPick: (plan: string) => void; onBack: () => void; onHome: () => void }) {
   return (
     <Shell step={1} onBack={onBack} onHome={onHome}>
       <div className="mx-auto max-w-4xl py-10 text-center">
-        <span className="chip text-zinc-300">No subscriptions. Ever.</span>
-        <h1 className="headline font-display mt-5 text-[clamp(2.4rem,6vw,4.25rem)] font-semibold leading-[1]">Pay once a tax year.</h1>
-        <p className="mx-auto mt-4 max-w-xl text-zinc-400">One price, everything included. Try it free first, or start now and you're covered from January to the April filing deadline.</p>
-        <div className="mt-12 grid items-stretch gap-5 text-left md:grid-cols-2">
-          {PLANS.map((p) => (
-            <div key={p.id} className={`relative flex flex-col rounded-[28px] p-8 ${p.popular ? "border-2 border-white bg-[#101010] shadow-[0_0_80px_rgba(255,255,255,.12)]" : "glass"}`}>
-              {p.popular && <span className="absolute -top-4 left-1/2 flex -translate-x-1/2 items-center gap-1.5 whitespace-nowrap rounded-full bg-white px-4 py-1.5 text-sm font-semibold text-black">Most popular</span>}
-              <div className="text-center">
-                <div className="font-display text-2xl font-semibold">{p.name}</div>
-                {current === p.id && <span className="chip mt-2 text-zinc-300"><Check size={13} />Your current pick</span>}
-                <div className="mt-1 text-sm text-zinc-400">{p.blurb}</div>
-                <div className="font-display num mt-6 text-6xl font-semibold">{p.price}</div>
-                <div className="mt-1 text-xs text-zinc-400">{p.unit}</div>
+        <span className="chip text-zinc-300">One plan, three ways to pay</span>
+        <h1 className="headline font-display mt-5 text-[clamp(2.4rem,6vw,4.25rem)] font-semibold leading-[1]">Pick how you pay.</h1>
+        <p className="mx-auto mt-4 max-w-xl text-zinc-400">Everything is included on every plan. Pay $10 a month, or save 5% paying every 3 months or 10% paying once a year.</p>
+        <div className="mt-12 grid items-stretch gap-5 text-left md:grid-cols-3">
+          {PLANS.map((p) => {
+            const best = p.id === "annual";
+            const every = p.months === 1 ? "every month" : p.months === 12 ? "once a year" : `every ${p.months} months`;
+            return (
+              <div key={p.id} data-plan={p.id} className={`relative flex flex-col rounded-[28px] p-7 ${best ? "border-2 border-white bg-[#101010] shadow-[0_0_80px_rgba(255,255,255,.12)]" : "glass"}`}>
+                {best && <span className="absolute -top-4 left-1/2 flex -translate-x-1/2 items-center gap-1.5 whitespace-nowrap rounded-full bg-white px-4 py-1.5 text-sm font-semibold text-black">Best value</span>}
+                <div className="text-center">
+                  <div className="font-display text-2xl font-semibold">{p.name}</div>
+                  {current === p.id && <span className="chip mt-2 text-zinc-300"><Check size={13} />Your current pick</span>}
+                  <div className="font-display num mt-5 text-5xl font-semibold">{dollars(periodCents(p))}</div>
+                  <div className="mt-1 text-sm text-zinc-300">billed {every}</div>
+                  <div className="mt-3 min-h-[2.5rem] text-xs text-zinc-400">{p.discountPct ? <>{dollars(perMonthCents(p))} a month. {p.discountPct}% off {dollars(fullPriceCents(p))} at the monthly price.</> : <>Month to month.</>}</div>
+                </div>
+                <button className={`btn mt-auto w-full !rounded-xl !py-3.5 ${best ? "btn-primary" : "btn-ghost"}`} style={{ marginTop: 20 }} onClick={() => onPick(p.id)}>Choose {p.name}</button>
               </div>
-              <ul className="mt-7 space-y-3 text-sm">
-                {FEATURES.map((f) => <li key={f} className="flex gap-3"><Check size={18} className="shrink-0" />{f}</li>)}
-              </ul>
-              <p className="muted mt-6 text-xs">{p.note}</p>
-              <button className={`btn mt-auto w-full !rounded-xl !py-3.5 ${p.popular ? "btn-primary" : "btn-ghost"}`} style={{ marginTop: 24 }} onClick={() => onPick(p.id)}>{p.cta}</button>
-            </div>
-          ))}
+            );
+          })}
         </div>
-        <p className="mt-8 text-xs text-zinc-400">Hackathon demo: no payment is taken.</p>
+        <div className="glass mx-auto mt-6 p-6 text-left sm:p-7">
+          <div className="text-sm font-semibold">Every plan includes</div>
+          <ul className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+            {FEATURES.map((f) => <li key={f} className="flex gap-3"><Check size={18} className="shrink-0" />{f}</li>)}
+          </ul>
+        </div>
+        <p className="mt-8 text-xs text-zinc-400">Choosing a plan doesn&apos;t charge you. This version doesn&apos;t ask for card details or take payments yet.</p>
       </div>
     </Shell>
   );
@@ -642,9 +621,36 @@ function TypedIn({ onUse }: { onUse: (t: TypedTotals) => void }) {
   );
 }
 
+/* ---------------- QuickBooks (Intuit OAuth) ---------------- */
+
+// Sends the browser to /api/qbo/connect, which redirects to Intuit's sign-in. It checks first (without following the redirect)
+// so a site without QuickBooks keys shows a plain message here instead of a raw error page. Nothing here is a sample.
+function QuickBooksButton() {
+  const [state, setState] = useState<"idle" | "checking" | "leaving">("idle");
+  const [msg, setMsg] = useState("");
+  const start = async () => {
+    setMsg(""); setState("checking");
+    try {
+      const r = await fetch("/api/qbo/connect", { redirect: "manual", cache: "no-store" });
+      if (r.type === "opaqueredirect" || (r.status >= 300 && r.status < 400)) { setState("leaving"); window.location.assign("/api/qbo/connect"); return; }
+      const j = await r.json().catch(() => ({}));
+      setMsg((j as { error?: string }).error || "QuickBooks couldn't start. Try again.");
+    } catch { setMsg("QuickBooks couldn't start. Check your connection and try again."); }
+    setState("idle");
+  };
+  return (
+    <div className="flex flex-col gap-2">
+      <button className="btn btn-ghost w-full !rounded-xl !py-3.5" onClick={start} disabled={state !== "idle"} aria-busy={state !== "idle" || undefined} data-qbo-connect>
+        {state === "idle" ? "Connect QuickBooks" : state === "checking" ? "Checking QuickBooks…" : "Opening Intuit sign-in…"}
+      </button>
+      {msg && <span className="text-xs text-zinc-400" role="alert">{msg}</span>}
+    </div>
+  );
+}
+
 /* ---------------- Connect ---------------- */
 
-export function Connect({ onPlaidSandbox, onQuickBooksSandbox, onPlaid, onCsv, onTyped, busy, error, onBack, onHome }: { onPlaidSandbox: (bank: string) => void; onQuickBooksSandbox: (company: string) => void; onPlaid: (d: { txns: Txn[]; balances: Profile["balances"] }) => void; onCsv: (txns: Txn[]) => void; onTyped: (t: TypedTotals) => void; busy: string; error: string; onBack: () => void; onHome: () => void }) {
+export function Connect({ onPlaidSandbox, onPlaid, onCsv, onTyped, busy, error, onBack, onHome }: { onPlaidSandbox: (bank: string) => void; onPlaid: (d: { txns: Txn[]; balances: Profile["balances"] }) => void; onCsv: (txns: Txn[]) => void; onTyped: (t: TypedTotals) => void; busy: string; error: string; onBack: () => void; onHome: () => void }) {
   const [pick, setPick] = useState<Pick | null>(null);
   // The pop-up window tells us when the app is connected.
   useEffect(() => {
@@ -671,9 +677,9 @@ export function Connect({ onPlaidSandbox, onQuickBooksSandbox, onPlaid, onCsv, o
           <div>
             <div className="flex items-center gap-4">
               <img src="/quickbooks-logo.svg" alt="" width={48} height={48} className="brand-logo h-12 w-12 shrink-0 p-2" />
-              <div><div className="font-semibold">QuickBooks</div><div className="text-sm text-zinc-400">Already use QuickBooks? Connect it in one tap.</div></div>
+              <div><div className="font-semibold">QuickBooks</div><div className="text-sm text-zinc-400">Already use QuickBooks? Sign in with Intuit to share your Profit &amp; Loss, read-only.</div></div>
             </div>
-            <div className="mt-4"><PlaidButton onSandbox={onQuickBooksSandbox} label="Connect QuickBooks" primary={false} /></div>
+            <div className="mt-4"><QuickBooksButton /></div>
           </div>
           <div className="flex items-center gap-3 text-xs text-zinc-400"><span className="h-px flex-1 bg-zinc-800" />payment apps<span className="h-px flex-1 bg-zinc-800" /></div>
           <div className="rounded-2xl border border-white/15 bg-white/[0.04] p-4">
@@ -721,7 +727,7 @@ export function Connect({ onPlaidSandbox, onQuickBooksSandbox, onPlaid, onCsv, o
         </div>
       </div>
       {pick && pick.kind === "app" && <AppConnect app={pick.preset || "App"} onClose={() => setPick(null)} onDone={(n) => onPlaidSandbox(n)} />}
-      {pick && pick.kind !== "app" && <PickSheet pick={pick} busy={!!busy} onClose={() => setPick(null)} onPick={(n) => (pick.kind === "qbo" ? onQuickBooksSandbox(n) : onPlaidSandbox(n))} />}
+      {pick && pick.kind !== "app" && <PickSheet pick={pick} busy={!!busy} onClose={() => setPick(null)} onPick={(n) => onPlaidSandbox(n)} />}
     </Shell>
   );
 }

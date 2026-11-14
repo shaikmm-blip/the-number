@@ -10,7 +10,7 @@ import { syncAll } from "../sync/sync";
 export async function POST() {
   const plaid = plaidClient();
   if (!plaid) return notConfigured();
-  if ((process.env.PLAID_ENV || "").trim().toLowerCase() === "production") return Response.json({ error: "Demo bank is sandbox only" }, { status: 403 });
+  if ((process.env.PLAID_ENV || "").trim().toLowerCase() === "production") return Response.json({ error: "The sample bank works in Plaid Sandbox only." }, { status: 403 });
   try {
     const pt = await plaid.sandboxPublicTokenCreate({
       institution_id: "ins_109508", // First Platypus Bank (Plaid test institution)

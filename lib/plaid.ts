@@ -31,4 +31,4 @@ export function mapPlaidTxn(t: { transaction_id: string; date: string; name: str
 }
 
 export const notConfigured = () =>
-  Response.json({ error: "Bank connections aren't switched on in this demo yet. Pick a payment app below to see a sample business instead." }, { status: 501 });
+  Response.json({ error: "Bank connections aren't set up on this site yet. Pick a payment app below to see a sample business instead." }, { status: 501 });

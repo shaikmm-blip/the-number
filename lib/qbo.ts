@@ -13,7 +13,7 @@ export function qboConfig(origin: string) {
 }
 
 export const qboNotConfigured = () =>
-  Response.json({ error: "QuickBooks isn't switched on in this demo yet. Pick a payment app on the connect step to see a sample business instead." }, { status: 501 });
+  Response.json({ error: "QuickBooks isn't set up on this site yet. Pick a payment app below to see a sample business instead." }, { status: 501 });
 
 type Col = { ColTitle?: string; MetaData?: { Name: string; Value: string }[] };
 type Row = { group?: string; Summary?: { ColData: { value: string }[] }; Rows?: { Row?: Row[] } };

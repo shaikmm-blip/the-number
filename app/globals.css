@@ -53,6 +53,12 @@ body { font-family: var(--font-body); -webkit-font-smoothing: antialiased; }
 .btn-primary:hover { background: #fff; }
 .btn-ghost { background: rgba(255,255,255,0.04); color: var(--fg); border: 1px solid var(--line-2); }
 .btn-ghost:hover { border-color: rgba(255,255,255,.35); }
+/* Owner request (Nov 14): Settle is green, the tab (desktop + phone) and Settle's main button. Scoped classes; nothing else changes. */
+.btn-settle { background: var(--green); color: #000; }
+.btn-settle:hover { background: color-mix(in srgb, var(--green) 82%, #fff); }
+.nav-settle { color: var(--green); }
+@media (hover: hover) { .nav-settle:not([aria-current="page"]):hover { background: color-mix(in srgb, var(--green) 14%, transparent); } }
+.nav-settle[aria-current="page"] { background: var(--green); color: #000; }
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 
 .chip { display: inline-flex; align-items: center; gap: .4rem; font-size: .75rem; font-weight: 600; padding: .3rem .7rem; border-radius: 999px; border: 1px solid var(--line-2); background: rgba(255,255,255,.03); }
