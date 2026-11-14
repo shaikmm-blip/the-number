@@ -235,25 +235,22 @@ function Shell({ children, step, onBack, onHome }: { children: React.ReactNode; 
 
 /* ---------------- Sign up ---------------- */
 
-export type Account = { name: string; email: string; business: string; plan?: string; priorYearTax?: "yes" | "no"; wagesCents?: number };
+export type Account = { name: string; email: string; business: string; plan?: string; priorYearTax?: "yes" | "no" };
 
-type Draft = { name: string; email: string; business: string; prior: "" | "yes" | "no"; paycheck: "" | "yes" | "no"; wages: string };
+type Draft = { name: string; email: string; business: string; prior: "" | "yes" | "no" };
 
 export function SignUp({ onDone, onBack, onHome, draft, onDraft }: { onDone: (a: Account) => void; onBack: () => void; onHome: () => void; draft: Draft; onDraft: (d: Draft) => void }) {
   // What was typed is kept by the parent, so coming Back to this step shows it again.
   const [name, setName] = useState(draft.name), [email, setEmail] = useState(draft.email), [business, setBusiness] = useState(draft.business);
   const [prior, setPrior] = useState(draft.prior);
-  const [paycheck, setPaycheck] = useState(draft.paycheck), [wages, setWages] = useState(draft.wages); // V2
-  useEffect(() => { onDraft({ name, email, business, prior, paycheck, wages }); }, [name, email, business, prior, paycheck, wages, onDraft]);
+  useEffect(() => { onDraft({ name, email, business, prior }); }, [name, email, business, prior, onDraft]);
   const [err, setErr] = useState("");
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return setErr("Add your first name so we know what to call you.");
     if (!/^\S+@\S+\.\S+$/.test(email)) return setErr("That email doesn't look right. Check for a typo.");
     if (!business.trim()) return setErr("Tell us what your business does, in your own words.");
-    let wagesCents: number | undefined = paycheck === "no" ? 0 : undefined;
-    if (paycheck === "yes") { const w = parseTypedAmount(wages, "expected wages for this year"); if (typeof w !== "number") return setErr(w.error); wagesCents = w; }
-    onDone({ name: name.trim().split(" ")[0], email: email.trim(), business: business.trim(), priorYearTax: prior || undefined, wagesCents });
+    onDone({ name: name.trim().split(" ")[0], email: email.trim(), business: business.trim(), priorYearTax: prior || undefined });
   };
   return (
     <Shell step={0} onBack={onBack} onHome={onHome}>
@@ -292,23 +289,6 @@ export function SignUp({ onDone, onBack, onHome, draft, onDraft }: { onDone: (a:
                 </label>
               ))}
             </div>
-          </fieldset>
-          {/* V2: a paycheck changes the income tax on the business (wages fill the deduction and lower brackets first). */}
-          <fieldset className="mt-4">
-            <legend className="text-sm font-medium">Do you also have a paycheck job this year?</legend>
-            <div className="mt-2 grid grid-cols-2 gap-2">
-              {([["no", "No"], ["yes", "Yes"]] as const).map(([v, l]) => (
-                <label key={v} className={`flex cursor-pointer items-center gap-2.5 rounded-xl border px-3 py-2.5 text-sm has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-white ${paycheck === v ? "border-white" : "border-zinc-800"}`}>
-                  <input type="radio" name="su-paycheck" value={v} checked={paycheck === v} onChange={() => setPaycheck(v)} className="accent-white" />{l}
-                </label>
-              ))}
-            </div>
-            {paycheck === "yes" && (
-              <div className="mt-2">
-                <label className="block text-xs text-zinc-400" htmlFor="su-wages">This year&apos;s expected wages before tax (Form W-2 pay)</label>
-                <input id="su-wages" inputMode="decimal" className="input mt-1" value={wages} onChange={(e) => setWages(e.target.value)} placeholder="30,000" />
-              </div>
-            )}
           </fieldset>
           {err && <p className="mt-3 text-sm" style={{ color: "var(--red)" }}>{err}</p>}
           <button className="btn btn-primary mt-6 w-full !rounded-xl !py-3.5">Create account <ArrowRight size={16} /></button>

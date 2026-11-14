@@ -177,16 +177,3 @@ describe("V7: typed-in totals in the itemized PDF", () => {
     expect(text).toContain(pdfUSD(r.incomeCents));
   });
 });
-
-describe("V2: paycheck wages in the PDF", () => {
-  const r = computeNumber(scaleBusiness(sample(), DEMO_FACTOR), { ...DEMO_PROFILE, wagesCents: 3_000_000 });
-  const text = pdfText(buildEstimatePdf(new jsPDF({ unit: "pt", format: "letter" }), r, { source: "Full-year sample business", generated: new Date("2026-11-13T12:00:00Z") }));
-  it("names the wages, the withholding assumption and the business's share, and totals match", () => {
-    expect(r.owedSoFarCents).toBe(702_199);
-    expect(text).toContain("Paycheck wages (expected; tax on them assumed covered by withholding)");
-    expect(text).toMatch(/\$30,000 of paycheck wages/);
-    expect(text).toContain("Minus income tax on the wages alone");
-    expect(text).toContain("Income tax from the business");
-    expect(text).toContain("$7,021.99");
-  });
-});

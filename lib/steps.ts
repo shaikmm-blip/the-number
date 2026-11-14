@@ -19,10 +19,6 @@ export interface StepGroup { title: string; steps: Step[] }
 export const sourceLink = (k: SourceKey) => ({ title: SOURCE_TITLES[k], url: SOURCES[k] });
 
 export const ASSUMPTION_LINE = `Assumes a sole proprietor filing single with no other income, federal tax only, the standard deduction, tax year ${TAX_YEAR}.`;
-/** V2: the assumption line for this estimate (names the paycheck wages when there are any). */
-export const assumptionLine = (r: NumberResult) => r.wagesCents > 0
-  ? `Assumes a sole proprietor filing single with ${formatUSD(r.wagesCents)} of paycheck wages and no other income, paycheck withholding that covers the tax on those wages, federal tax only, the standard deduction, tax year ${TAX_YEAR}.`
-  : ASSUMPTION_LINE;
 
 export function calculationSteps(r: NumberResult): StepGroup[] {
   const f = r.fed;
@@ -30,27 +26,22 @@ export function calculationSteps(r: NumberResult): StepGroup[] {
   const se: Step[] = [
     { id: "profit", label: "Business profit", rule: "Business income minus business costs (Schedule C net profit).", amountCents: f.netProfitCents, kind: "input", source: "soleProprietor" },
     { id: "se-base", label: "Earnings counted for self-employment tax", rule: "92.35% of profit, never below $0 (Schedule SE, line 4a). Under $400 of these earnings, there is no self-employment tax.", amountCents: f.se.netEarningsCents, kind: "part", source: "scheduleSE" },
-    { id: "ss", label: "Social Security part", rule: f.wagesCents > 0 ? `12.4% of those earnings, up to $184,500 for 2026 minus your Social Security wages (${usd(Math.max(0, 18_450_000 - f.wagesCents))} left; Schedule SE, lines 7-10).` : "12.4% of those earnings, on earnings up to $184,500 for 2026.", amountCents: f.se.socialSecurityCents, kind: "part", source: f.wagesCents > 0 ? "scheduleSE" : "seTax" },
+    { id: "ss", label: "Social Security part", rule: "12.4% of those earnings, on earnings up to $184,500 for 2026.", amountCents: f.se.socialSecurityCents, kind: "part", source: "seTax" },
     { id: "medicare", label: "Medicare part", rule: "2.9% of those earnings.", amountCents: f.se.medicareCents, kind: "part", source: "seTax" },
     { id: "se-total", label: "Self-employment tax", rule: "Social Security part plus Medicare part.", amountCents: f.se.totalCents, kind: "subtotal", source: "seTax" },
   ];
   // The engine never lets income or the amount owed go below $0. When it clamps, show that as its own line so the steps still add up.
-  const lossUnused = f.agiCents - (f.wagesCents + f.netProfitCents - f.halfSeDeductionCents);
+  const lossUnused = f.agiCents - (f.netProfitCents - f.halfSeDeductionCents);
   const overpaid = Math.max(0, r.taxPaidCents - f.totalTaxCents);
   const it: Step[] = [
-    ...(f.wagesCents > 0 ? [{ id: "wages", label: "Plus paycheck wages", rule: "This year's expected wages before tax, as you entered them. They use up the standard deduction and the lower brackets first.", amountCents: f.wagesCents, kind: "input" } as Step] : []),
     { id: "half-se", label: "Minus half of self-employment tax", rule: "Half of self-employment tax comes off your income (the deduction for one-half of SE tax).", amountCents: -f.halfSeDeductionCents, kind: "part", source: "seTax" },
     ...(lossUnused > 0 ? [{ id: "loss", label: "Business loss not used here", rule: "This estimate does not go below $0 income; a loss is not applied against anything else (an estimate convention, not an IRS rule).", amountCents: lossUnused, kind: "part" } as Step] : []),
-    { id: "agi", label: "Adjusted gross income", rule: f.wagesCents > 0 ? "Wages plus profit minus half of self-employment tax; a business loss is not used against wages in this estimate." : "Profit minus half of self-employment tax, never below $0 in this estimate.", amountCents: f.agiCents, kind: "subtotal", source: "seTax" },
+    { id: "agi", label: "Adjusted gross income", rule: "Profit minus half of self-employment tax, never below $0 in this estimate.", amountCents: f.agiCents, kind: "subtotal", source: "seTax" },
     { id: "std", label: "Minus the standard deduction", rule: `This estimate uses the ${formatUSD(f.standardDeductionCents)} single-filer standard deduction for ${TAX_YEAR}, up to the income left.`, amountCents: -Math.min(f.standardDeductionCents, f.agiCents), kind: "part", source: "irs2026" },
-    { id: "qbi", label: "Minus the small-business deduction", rule: "Up to 20% of business income (qualified business income deduction), and no more than 20% of taxable income before this deduction (Form 8995 instructions).", amountCents: -f.qbiDeductionCents, kind: "part", source: "qbi" },
+    { id: "qbi", label: "Minus the small-business deduction", rule: "Up to 20% of business income (qualified business income deduction). This estimate also limits it to 20% of the income left after the standard deduction; that limit is not yet checked against an IRS source.", amountCents: -f.qbiDeductionCents, kind: "part", source: "qbi" },
     { id: "taxable", label: "Taxable income", rule: "What is left after the deductions.", amountCents: f.taxableIncomeCents, kind: "subtotal", source: "irs2026" },
     ...f.incomeTaxLines.filter((b) => b.amountCents > 0).map((b): Step => ({ id: `bracket-${b.rateBps}`, label: `${b.rateBps / 100}% bracket`, rule: `${b.rateBps / 100}% on ${usd(b.amountCents)} of taxable income (${TAX_YEAR} single-filer brackets).`, amountCents: b.taxCents, kind: "part", source: "irs2026" })),
-    ...(f.wagesCents > 0 ? [
-      { id: "it-all", label: "Income tax on wages and business", rule: "The bracket amounts added together.", amountCents: f.incomeTaxAllCents, kind: "subtotal", source: "irs2026" } as Step,
-      { id: "it-wages", label: "Minus income tax on the wages alone", rule: "The same brackets on your wages minus the standard deduction. Your paycheck withholding is assumed to cover this part.", amountCents: -f.wagesOnlyIncomeTaxCents, kind: "part", source: "irs2026" } as Step,
-      { id: "it-total", label: "Income tax from the business", rule: "What the business adds on top of your wages.", amountCents: f.incomeTaxCents, kind: "subtotal", source: "irs2026" } as Step,
-    ] : [{ id: "it-total", label: "Income tax", rule: "The bracket amounts added together.", amountCents: f.incomeTaxCents, kind: "subtotal", source: "irs2026" } as Step]),
+    { id: "it-total", label: "Income tax", rule: "The bracket amounts added together.", amountCents: f.incomeTaxCents, kind: "subtotal", source: "irs2026" },
   ];
   const total: Step[] = [
     { id: "se-again", label: "Self-employment tax", rule: "From above.", amountCents: f.se.totalCents, kind: "part", source: "seTax" },

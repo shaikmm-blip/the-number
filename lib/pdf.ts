@@ -2,7 +2,7 @@
 // so the two cannot disagree. It summarizes an estimate; it is not a return and nobody has reviewed it.
 import type { jsPDF as JsPDF } from "jspdf";
 import type { NumberResult } from "./number";
-import { assumptionLine, calculationSteps, sourceLink, type SourceKey } from "./steps";
+import { ASSUMPTION_LINE, calculationSteps, sourceLink, type SourceKey } from "./steps";
 import { TAX_YEAR } from "./taxConfig";
 import type { Txn } from "./types";
 import { isTypedTotal } from "./entry";
@@ -49,7 +49,6 @@ export function buildEstimatePdf(doc: JsPDF, r: NumberResult, meta: PdfMeta, tra
   row("Business income", r.incomeCents);
   row("Business costs", -r.expensesCents);
   row("Business profit", r.netProfitCents, true);
-  if (r.wagesCents > 0) row("Paycheck wages (expected; tax on them assumed covered by withholding)", r.wagesCents);
   y += 4;
 
   const cited = new Set<SourceKey>();
@@ -65,7 +64,7 @@ export function buildEstimatePdf(doc: JsPDF, r: NumberResult, meta: PdfMeta, tra
 
   heading("Assumptions and exclusions");
   font(8.5); ink(40);
-  for (const line of [assumptionLine(r), "Not included: state and local tax, other income, credits, and any underpayment penalty.", "Educational estimate, not tax advice. Not reviewed by a CPA or the IRS. Check the amount before paying."]) {
+  for (const line of [ASSUMPTION_LINE, "Not included: state and local tax, other income, credits, and any underpayment penalty.", "Educational estimate, not tax advice. Not reviewed by a CPA or the IRS. Check the amount before paying."]) {
     const wrapped = doc.splitTextToSize(line, R - M); room(wrapped.length * 10); doc.text(wrapped, M, y); y += wrapped.length * 10 + 1;
   }
   y += 6;
