@@ -17,7 +17,7 @@ export default function DirectPayReplica() {
     <div style={{ minHeight: "100vh", background: "#f3f4f6", color: "#1b1b1b", fontFamily: "system-ui, 'Segoe UI', Arial, sans-serif" }}>
       {/* demo ribbon */}
       <div style={{ background: "#b91c1c", color: "#fff", textAlign: "center", fontSize: 13, fontWeight: 700, padding: "7px 12px", letterSpacing: 0.3 }}>
-        DEMO REPLICA — not the real IRS. Built to show The Number&apos;s Settle Assist extension.
+        EXAMPLE REPLICA — not the real IRS. Built to show The Number&apos;s Settle Assist extension.
       </div>
 
       {/* gov-style header (no official seal) */}
@@ -26,7 +26,7 @@ export default function DirectPayReplica() {
           <div style={{ width: 34, height: 34, borderRadius: 7, background: "#fff", color: "#112e51", display: "grid", placeItems: "center", fontWeight: 800 }}>★</div>
           <div>
             <div style={{ fontSize: 18, fontWeight: 700 }}>Direct Pay</div>
-            <div style={{ fontSize: 12, opacity: 0.8 }}>Pay your taxes from your bank account — demo replica</div>
+            <div style={{ fontSize: 12, opacity: 0.8 }}>Pay your taxes from your bank account — example replica</div>
           </div>
         </div>
       </header>
@@ -46,7 +46,7 @@ export default function DirectPayReplica() {
 
         {submitted ? (
           <div style={{ background: "#fff", border: "1px solid #d6d7d9", borderRadius: 4, padding: 24 }}>
-            <div style={{ fontSize: 16, fontWeight: 700, color: "#2e8540" }}>Demo stops here.</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#2e8540" }}>This example stops here.</div>
             <p style={{ color: "#555", fontSize: 14, marginTop: 8 }}>
               On the real IRS site you&apos;d continue to verify your identity and enter your bank details. The Number never submits a payment for you — you always do that yourself.
             </p>
@@ -102,7 +102,7 @@ export default function DirectPayReplica() {
         )}
 
         <p style={{ color: "#8a8a8a", fontSize: 11.5, marginTop: 22, maxWidth: 560 }}>
-          Demo replica for The Number. Not affiliated with, or endorsed by, the Internal Revenue Service. No information entered here is collected or transmitted.
+          Example replica for The Number. Not affiliated with, or endorsed by, the Internal Revenue Service. No information entered here is collected or transmitted.
         </p>
       </main>
     </div>

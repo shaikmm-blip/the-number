@@ -192,8 +192,9 @@ describe("V1/V4 follow-up: the exemption reaches every surface; the penalty copy
   it("the missed-payment alert describes an estimate on these amounts, not a promise", () => {
     const r = computeNumber(txns(), DEMO_PROFILE, "2026-11-13");
     const body = r.alerts.find((a) => a.id === "missed")!.body;
-    expect(body).toMatch(/On these amounts/);
-    expect(body).toMatch(/an illustration: the IRS figures the real penalty from each period's required payment/);
+    expect(body).toMatch(/on these amounts/i);
+    expect(body).toMatch(/^Illustrative late penalty on these amounts/);
+    expect(body).toMatch(/The IRS figures the real one from each period's required payment, so it can differ/);
     expect(body).not.toMatch(/avoids it|stops it growing|The IRS adds/);
     expect(body).not.toMatch(/assumed/); // Nov 13: no 2027 days counted
   });
@@ -265,6 +266,14 @@ describe("Owner follow-up (Nov 14): alert explanations are one sentence, two at 
   for (const [name, profile, today] of cases) it(name, () => {
     const r = computeNumber(scaleBusiness(load(), DEMO_FACTOR), profile, today);
     for (const a of r.alerts) expect(sentences(a.body), `${a.id}: ${a.body}`).toBeLessThanOrEqual(2);
+  });
+  it("low profit (under the standard deduction) and typed totals also stay at two sentences", () => {
+    const small = computeNumber(scaleBusiness(load(), 0.5), DEMO_PROFILE, "2026-11-13");
+    expect(small.fed.incomeTaxCents).toBe(0);
+    for (const a of small.alerts) expect(sentences(a.body), `${a.id}: ${a.body}`).toBeLessThanOrEqual(2);
+    expect(small.alerts.find((a) => a.id === "rule")!.body).toMatch(/standard deduction only lowers income tax/);
+    const typed = computeNumber(typedTotalsTxns({ incomeCents: 2_000_000, costsCents: 200_000, paidCents: 0 }, "2026-11-13"), { ...DEMO_PROFILE, typedTotals: true, priorYearTax: undefined, parentRule: undefined, balances: [], bills: [] , asOf: "2026-11-13" }, "2026-11-13");
+    for (const a of typed.alerts) expect(sentences(a.body), `${a.id}: ${a.body}`).toBeLessThanOrEqual(2);
   });
   it("the parent-rule alert no longer says the sample is under the income-tax limit", () => {
     const r = computeNumber(scaleBusiness(load(), DEMO_FACTOR), DEMO_PROFILE, "2026-11-13");

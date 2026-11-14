@@ -141,3 +141,53 @@ describe("Plaid routes, mocked", () => {
     expect((await r.json()).balances[0].name).toBe("Fictional checking");
   });
 });
+
+describe("Plaid Link success → exchange → import (mocked Plaid API, real exchange route and syncAll)", () => {
+  const fakeClient = (status: string, added: { transaction_id: string; date: string; name: string; amount: number; account_id: string }[]) => ({
+    itemPublicTokenExchange: vi.fn(async (_: { public_token: string }) => ({ data: { access_token: "access-sandbox-picked" } })),
+    accountsGet: vi.fn(async () => ({ data: { accounts: [{ account_id: "acc1", name: "Plaid Checking", type: "depository", balances: { available: 1234.56, current: 1300 } }] } })),
+    transactionsSync: vi.fn(async () => ({ data: { added, next_cursor: "c1", has_more: false, transactions_update_status: status } })),
+  });
+  const viaRoute = async (POST: (r: Request) => Promise<Response>) => (async (url: string, init?: RequestInit) => POST(new Request(`${ORIGIN}${url}`, init))) as unknown as typeof fetch;
+  const rows = [
+    { transaction_id: "t1", date: "2026-03-02", name: "Zelle from customer driveway wash", amount: -250, account_id: "acc1" },
+    { transaction_id: "t2", date: "2026-03-05", name: "Home Depot supplies", amount: 42.1, account_id: "acc1" },
+  ];
+  it("imports the account the person picked in Link, labelled as a Plaid Sandbox test bank", async () => {
+    const client = fakeClient("HISTORICAL_UPDATE_COMPLETE", rows);
+    vi.doMock("@/lib/plaid", async (orig) => ({ ...(await orig<typeof import("@/lib/plaid")>()), plaidClient: () => client }));
+    const { POST } = await import("@/app/api/plaid/exchange/route");
+    const { finishPlaidLink } = await import("@/lib/plaidLink");
+    const res = await finishPlaidLink("public-sandbox-picked", { institution: "First Platypus Bank", sandbox: true }, await viaRoute(POST));
+    expect(client.itemPublicTokenExchange).toHaveBeenCalledWith({ public_token: "public-sandbox-picked" }); // the selected token, not a new sample item
+    expect(res.kind).toBe("data");
+    if (res.kind !== "data") return;
+    expect(res.source).toBe("Plaid Sandbox · First Platypus Bank (test bank, fictional data)");
+    expect(res.txns.map((t) => t.id)).toEqual(["plaid-t1", "plaid-t2"]);
+    expect(res.txns.every((t) => t.source === "Plaid · Plaid Checking")).toBe(true);
+    expect(res.balances).toEqual([{ name: "Plaid Checking", balanceCents: 123_456 }]);
+    expect(res.txns.find((t) => t.id === "plaid-t1")!.amountCents).toBe(25_000); // Plaid: positive = money out; stored as money in
+  });
+  it("an incomplete history is a 'try again', not an estimate on part of the year", async () => {
+    vi.doMock("@/lib/plaid", async (orig) => ({ ...(await orig<typeof import("@/lib/plaid")>()), plaidClient: () => ({ itemPublicTokenExchange: vi.fn(async () => ({ data: { access_token: "a" } })) }) }));
+    vi.doMock("@/app/api/plaid/sync/sync", () => ({ syncAll: vi.fn(async () => ({ txns: [{ id: "plaid-x" }], balances: [], complete: false })) }));
+    const { POST } = await import("@/app/api/plaid/exchange/route");
+    const { finishPlaidLink } = await import("@/lib/plaidLink");
+    const res = await finishPlaidLink("p", { institution: "First Platypus Bank", sandbox: true }, await viaRoute(POST));
+    expect(res).toEqual({ kind: "pending", message: "Connected to First Platypus Bank, but Plaid is still loading earlier transactions. Try again in a minute." });
+  });
+  it("no transactions yet is an honest empty state; a failed exchange shows Plaid's message", async () => {
+    const client = fakeClient("HISTORICAL_UPDATE_COMPLETE", []);
+    vi.doMock("@/lib/plaid", async (orig) => ({ ...(await orig<typeof import("@/lib/plaid")>()), plaidClient: () => client }));
+    vi.doMock("@/app/api/plaid/sync/sync", () => ({ syncAll: vi.fn(async () => ({ txns: [], balances: [], complete: true })) }));
+    let { POST } = await import("@/app/api/plaid/exchange/route");
+    const { finishPlaidLink } = await import("@/lib/plaidLink");
+    expect((await finishPlaidLink("p", { sandbox: true }, await viaRoute(POST))).kind).toBe("empty");
+    vi.resetModules();
+    vi.doMock("@/lib/plaid", async (orig) => ({ ...(await orig<typeof import("@/lib/plaid")>()), plaidClient: () => ({ itemPublicTokenExchange: vi.fn(async () => { throw Object.assign(new Error("x"), { response: { data: { error_message: "the public token has expired" } } }); }) }) }));
+    ({ POST } = await import("@/app/api/plaid/exchange/route"));
+    const f2 = await import("@/lib/plaidLink");
+    expect(await f2.finishPlaidLink("p", { sandbox: true }, await viaRoute(POST))).toEqual({ kind: "error", message: "Couldn't connect the bank: the public token has expired" });
+    expect((await f2.finishPlaidLink("p", { sandbox: true }, (async () => { throw new Error("offline"); }) as unknown as typeof fetch)).kind).toBe("error");
+  });
+});

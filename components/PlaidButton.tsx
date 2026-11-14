@@ -1,20 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { usePlaidLink, type PlaidLinkOnSuccessMetadata } from "react-plaid-link";
+import { usePlaidLink, type PlaidLinkError, type PlaidLinkOnSuccessMetadata } from "react-plaid-link";
+import { finishPlaidLink } from "@/lib/plaidLink";
 import type { Profile, Txn } from "@/lib/types";
 
 /**
- * Opens the real Plaid Link window (bank search, logos, login).
- * Live mode: exchanges the token and pulls that bank's transactions.
- * Sandbox mode (`onSandbox` given): after a successful test login, loads our full-year fictional sample business through
- * Plaid Sandbox (/api/plaid/demo), because Plaid's built-in test users don't have a realistic year of business income.
- * The app labels that data as a sample, not as the bank account picked in Link.
+ * Opens the real Plaid Link window (bank search, logos, login). After a successful login it exchanges the public_token for the
+ * account the person picked and imports that item's transactions (lib/plaidLink.ts), in Sandbox (fictional test data) and live alike.
+ * The separate fictional sample business is offered elsewhere (payment apps, landing), never in place of this connection.
  * Link (and Plaid's script from cdn.plaid.com) only loads after the button is pressed and a link token exists.
  */
-export function PlaidButton({ onData, onSandbox, label = "Connect with Plaid", primary = true }: {
-  onData?: (d: { txns: Txn[]; balances: Profile["balances"] }) => void;
-  onSandbox?: (institution: string) => void;
+export function PlaidButton({ onData, sandbox = true, label = "Connect with Plaid", primary = true }: {
+  onData: (d: { txns: Txn[]; balances: Profile["balances"]; source: string }) => void;
+  sandbox?: boolean;
   label?: string;
   primary?: boolean;
 }) {
@@ -24,20 +23,20 @@ export function PlaidButton({ onData, onSandbox, label = "Connect with Plaid", p
 
   const onSuccess = useCallback(async (public_token: string, meta: PlaidLinkOnSuccessMetadata) => {
     setToken(null);
-    if (onSandbox) { onSandbox(meta.institution?.name || "your bank"); return; }
     setBusy(true); setMsg("Pulling your transactions…");
     try {
-      const r = await fetch("/api/plaid/exchange", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ public_token }) });
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok) { setMsg((j as { error?: string }).error || "Couldn't connect the bank. Try again."); return; }
+      const res = await finishPlaidLink(public_token, { institution: meta.institution?.name || undefined, sandbox });
+      if (res.kind !== "data") { setMsg(res.message); return; }
       setMsg("");
-      onData?.(j as { txns: Txn[]; balances: Profile["balances"] });
-    } catch {
-      setMsg("Couldn't reach the server to finish connecting. Try again.");
+      onData({ txns: res.txns, balances: res.balances, source: res.source });
     } finally { setBusy(false); }
-  }, [onData, onSandbox]);
+  }, [onData, sandbox]);
 
-  const onExit = useCallback(() => { setToken(null); setBusy(false); }, []);
+  // Plaid passes an error when Link itself failed; a plain cancel has none and stays silent.
+  const onExit = useCallback((err: PlaidLinkError | null) => {
+    setToken(null); setBusy(false);
+    if (err) setMsg(err.display_message || err.error_message || "Plaid stopped before connecting. Try again.");
+  }, []);
   const onLoadError = useCallback(() => { setToken(null); setBusy(false); setMsg("Plaid couldn't load. Check your connection and try again."); }, []);
 
   async function start() {
@@ -61,7 +60,7 @@ export function PlaidButton({ onData, onSandbox, label = "Connect with Plaid", p
 }
 
 // Mounted only while a link token exists, so Plaid's script isn't requested until someone presses the button.
-function LinkOpener({ token, onSuccess, onExit, onLoadError }: { token: string; onSuccess: (t: string, m: PlaidLinkOnSuccessMetadata) => void; onExit: () => void; onLoadError: () => void }) {
+function LinkOpener({ token, onSuccess, onExit, onLoadError }: { token: string; onSuccess: (t: string, m: PlaidLinkOnSuccessMetadata) => void; onExit: (err: PlaidLinkError | null) => void; onLoadError: () => void }) {
   const { open, ready, error } = usePlaidLink({ token, onSuccess, onExit });
   useEffect(() => { if (ready) open(); }, [ready, open]);
   useEffect(() => { if (error) onLoadError(); }, [error, onLoadError]);

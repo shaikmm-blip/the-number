@@ -26,8 +26,10 @@ export async function syncAll(plaid: PlaidApi, access_token: string) {
     await sleep(1200);
   }
   const txns = added.map((t) => classify(mapPlaidTxn(t, names.get(t.account_id) || "Account")));
+  // Plaid's /transactions/sync status: HISTORICAL_UPDATE_COMPLETE means the full history is in. Otherwise say so (partial import).
+  const complete = status === "HISTORICAL_UPDATE_COMPLETE";
   const balances = accounts
     .filter((a) => a.type === "depository")
     .map((a) => ({ name: a.name, balanceCents: toCents((a.balances.available ?? a.balances.current ?? 0).toFixed(2)) }));
-  return { txns, balances };
+  return { txns, balances, complete };
 }

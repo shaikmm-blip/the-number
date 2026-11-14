@@ -625,14 +625,14 @@ function TypedIn({ onUse }: { onUse: (t: TypedTotals) => void }) {
 
 // Sends the browser to /api/qbo/connect, which redirects to Intuit's sign-in. It checks first (without following the redirect)
 // so a site without QuickBooks keys shows a plain message here instead of a raw error page. Nothing here is a sample.
-function QuickBooksButton() {
+function QuickBooksButton({ onLeave }: { onLeave: () => void }) {
   const [state, setState] = useState<"idle" | "checking" | "leaving">("idle");
   const [msg, setMsg] = useState("");
   const start = async () => {
     setMsg(""); setState("checking");
     try {
       const r = await fetch("/api/qbo/connect", { redirect: "manual", cache: "no-store" });
-      if (r.type === "opaqueredirect" || (r.status >= 300 && r.status < 400)) { setState("leaving"); window.location.assign("/api/qbo/connect"); return; }
+      if (r.type === "opaqueredirect" || (r.status >= 300 && r.status < 400)) { setState("leaving"); onLeave(); window.location.assign("/api/qbo/connect"); return; }
       const j = await r.json().catch(() => ({}));
       setMsg((j as { error?: string }).error || "QuickBooks couldn't start. Try again.");
     } catch { setMsg("QuickBooks couldn't start. Check your connection and try again."); }
@@ -650,7 +650,7 @@ function QuickBooksButton() {
 
 /* ---------------- Connect ---------------- */
 
-export function Connect({ onPlaidSandbox, onPlaid, onCsv, onTyped, busy, error, onBack, onHome }: { onPlaidSandbox: (bank: string) => void; onPlaid: (d: { txns: Txn[]; balances: Profile["balances"] }) => void; onCsv: (txns: Txn[]) => void; onTyped: (t: TypedTotals) => void; busy: string; error: string; onBack: () => void; onHome: () => void }) {
+export function Connect({ onPlaidSandbox, onPlaid, onCsv, onTyped, onLeaveForQuickBooks, busy, error, onBack, onHome }: { onLeaveForQuickBooks: () => void; onPlaidSandbox: (bank: string) => void; onPlaid: (d: { txns: Txn[]; balances: Profile["balances"]; source: string }) => void; onCsv: (txns: Txn[]) => void; onTyped: (t: TypedTotals) => void; busy: string; error: string; onBack: () => void; onHome: () => void }) {
   const [pick, setPick] = useState<Pick | null>(null);
   // The pop-up window tells us when the app is connected.
   useEffect(() => {
@@ -671,7 +671,7 @@ export function Connect({ onPlaidSandbox, onPlaid, onCsv, onTyped, busy, error, 
               <span className="grid h-12 w-12 place-items-center rounded-2xl bg-white text-black"><Landmark size={22} /></span>
               <div><div className="font-semibold">Your bank</div><div className="text-sm text-zinc-400">Chase, Huntington, Fifth Third and 12,000+ more, via Plaid</div></div>
             </div>
-            <div className="mt-4">{live ? <PlaidButton onData={onPlaid} /> : <PlaidButton onSandbox={onPlaidSandbox} />}</div>
+            <div className="mt-4"><PlaidButton onData={onPlaid} sandbox={!live} /></div>
           </div>
           <div className="flex items-center gap-3 text-xs text-zinc-400"><span className="h-px flex-1 bg-zinc-800" />or<span className="h-px flex-1 bg-zinc-800" /></div>
           <div>
@@ -679,7 +679,7 @@ export function Connect({ onPlaidSandbox, onPlaid, onCsv, onTyped, busy, error, 
               <img src="/quickbooks-logo.svg" alt="" width={48} height={48} className="brand-logo h-12 w-12 shrink-0 p-2" />
               <div><div className="font-semibold">QuickBooks</div><div className="text-sm text-zinc-400">Already use QuickBooks? Sign in with Intuit to share your Profit &amp; Loss, read-only.</div></div>
             </div>
-            <div className="mt-4"><QuickBooksButton /></div>
+            <div className="mt-4"><QuickBooksButton onLeave={onLeaveForQuickBooks} /></div>
           </div>
           <div className="flex items-center gap-3 text-xs text-zinc-400"><span className="h-px flex-1 bg-zinc-800" />payment apps<span className="h-px flex-1 bg-zinc-800" /></div>
           <div className="rounded-2xl border border-white/15 bg-white/[0.04] p-4">

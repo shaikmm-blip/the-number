@@ -26,6 +26,8 @@ export type AlertPrefs = Record<string, boolean>;
 const DEFAULT_PREFS: AlertPrefs = { due: true, late: true, paid: true, weekly: true, locks: true, sms: true, email: false };
 const PREFS_KEY = "the-number:alerts";
 const KEY = "the-number:account";
+// Only while the browser is away at Intuit's sign-in: the account and plan typed so far (this tab only, removed on return).
+const QBO_RETURN_KEY = "the-number:qbo-return";
 
 
 export default function App() {
@@ -52,7 +54,7 @@ export default function App() {
   stageRef.current = stage;
   // Bumped every time data is used (enter). A bank connection started before that belongs to an older visit and is ignored.
   const epoch = useRef(0);
-  const plaidFor = (e: number) => (d: { txns: Txn[]; balances: Profile["balances"] }) => { if (e === epoch.current) onPlaid(d); };
+  const plaidFor = (e: number) => (d: { txns: Txn[]; balances: Profile["balances"]; source: string }) => { if (e === epoch.current) onPlaid(d); };
   const planFromApp = useRef(false); // pricing was opened from inside the app ("Change plan"), not during setup
   const wantLanding = useRef(false);
   const lastFocus = useRef<HTMLElement | null>(null);
@@ -87,6 +89,11 @@ export default function App() {
     const q = new URLSearchParams(window.location.search).get("qbo");
     if (!q) return;
     window.history.replaceState({ ...window.history.state, tn: "connect", i: 0 }, "", "/");
+    let kept: Account | null = null;
+    try {
+      const v = sessionStorage.getItem(QBO_RETURN_KEY); sessionStorage.removeItem(QBO_RETURN_KEY);
+      if (v) { const o = JSON.parse(v) as { account?: Account | null; draft?: { name: string; email: string; business: string } }; if (o.account) { kept = o.account; setAccount(o.account); } if (o.draft) setDraft(o.draft); }
+    } catch { /* fine: nothing kept */ }
     if (q !== "connected") { setError("QuickBooks wasn't connected. Try again."); setStage("connect"); return; }
     setStage("connect"); setBusy("qbo");
     const seq = ++loadSeq.current;
@@ -95,7 +102,7 @@ export default function App() {
       if (!r.ok) throw new Error(j.error);
       if (loadSeq.current !== seq) return; // superseded (e.g. a CSV was used meanwhile)
       const last = (j.txns as Txn[]).reduce((m, t) => (t.date > m ? t.date : m), `${TAX_YEAR}-01-01`);
-      setProfile({ ...DEMO_PROFILE, ownerName: "You", businessName: "Your business", age: 0, parentRule: undefined, priorYearTax: undefined, balances: [], bills: [], asOf: localToday() > last ? localToday() : last });
+      setProfile({ ...DEMO_PROFILE, ownerName: kept?.name || "You", businessName: kept?.business || "Your business", age: 0, parentRule: undefined, priorYearTax: undefined, balances: [], bills: [], asOf: localToday() > last ? localToday() : last });
       setTxns(j.txns); enter("QuickBooks (sandbox company), Profit & Loss");
     }).catch((e) => { if (loadSeq.current === seq) setError((e as Error).message); }).finally(() => { if (loadSeq.current === seq) setBusy(""); });
   }, []);
@@ -157,16 +164,17 @@ export default function App() {
     enter(note || "Sample statements (Chase + Cash App + Venmo)");
   }
 
-  function onPlaid(data: { txns: Txn[]; balances: Profile["balances"] }) {
+  // The account picked in Plaid Link (Sandbox or live), already exchanged and labelled by lib/plaidLink.ts.
+  function onPlaid(data: { txns: Txn[]; balances: Profile["balances"]; source: string }) {
     // A bank connection that finishes after the user already moved on (e.g. used a CSV) must not replace their data.
     if (stageRef.current !== "connect") return;
     // Our Plaid Sandbox test user (Jay's business): pair the bank data with Jay's profile (age, bills he entered).
     if (data.balances.some((b) => b.name.startsWith("Jay's Pressure Washing"))) {
       setProfile({ ...DEMO_PROFILE, asOf: localToday(), balances: data.balances });
-      setTxns(data.txns); enter("Your bank via Plaid (Sandbox test user)"); return;
+      setTxns(data.txns); enter(data.source); return;
     }
     setProfile({ ...DEMO_PROFILE, ownerName: account?.name || "You", businessName: account ? `${account.name}'s ${account.business.toLowerCase()}` : "Your business", age: 0, parentRule: undefined, priorYearTax: undefined, balances: data.balances, bills: [], asOf: localToday() });
-    setTxns(data.txns); enter("Your bank via Plaid");
+    setTxns(data.txns); enter(data.source);
   }
 
   // "Upload a CSV instead": rows were read and tagged in the browser (lib/upload.ts); count them as this person's own data.
@@ -201,7 +209,7 @@ export default function App() {
   if (stage === "signup") return <SignUp draft={draft} onDraft={setDraft} onBack={back} onHome={home} onDone={(a) => { setAccount({ ...a, plan: account?.plan }); go("pricing"); }} />;
   // Changing plan from inside the app goes straight back to the number; during setup the next step is still Connect.
   if (stage === "pricing") return <Pricing name={account?.name || "friend"} current={account?.plan} onBack={back} onHome={home} onPick={(plan) => { const toApp = planFromApp.current && !!txns; setAccount({ ...(account || { name: "", email: "", business: "" }), plan }); go(toApp ? "app" : "connect"); }} />;
-  if (stage === "connect" || !txns || !result) return <><div {...hush}><Connect onBack={back} onHome={home} onPlaidSandbox={(bank) => loadSampleBank(bank)} onPlaid={plaidFor(epoch.current)} onCsv={onCsv} onTyped={onTyped} busy={busy} error={error} /></div>{veil}</>;
+  if (stage === "connect" || !txns || !result) return <><div {...hush}><Connect onBack={back} onHome={home} onPlaidSandbox={(bank) => loadSampleBank(bank)} onPlaid={plaidFor(epoch.current)} onCsv={onCsv} onTyped={onTyped} onLeaveForQuickBooks={() => { try { sessionStorage.setItem(QBO_RETURN_KEY, JSON.stringify({ account, draft })); } catch { /* fine */ } }} busy={busy} error={error} /></div>{veil}</>;
 
   const byId = new Map(txns.map((t) => [t.id, t]));
   const openLine = (l: Line) => setWhy({ title: l.label, body: l.why, txns: l.txnIds?.map((i) => byId.get(i)!).filter(Boolean).slice(-6) });
@@ -563,6 +571,8 @@ function Profile({ r, txns, account, source, plan, onReconnect, onEditInfo, onCh
       setExportError("The PDF could not be created. Please try exporting again.");
     } finally { setExporting(false); }
   }
+  // Only data that came from Plaid or QuickBooks (not the sample, a CSV or typed totals) is called "Connected".
+  const dataKind = source === TYPED_SOURCE ? "Typed totals" : source === "Your CSV upload" ? "CSV imported" : /sample/i.test(source) ? "Sample data" : /^(Plaid Sandbox ·|Your bank via Plaid|QuickBooks \(sandbox company\))/.test(source) ? "Connected" : "Sample data";
   const rows: [string, string][] = [
     ["Name", account?.name || "You"],
     ["Email", account?.email || "—"],
@@ -592,12 +602,12 @@ function Profile({ r, txns, account, source, plan, onReconnect, onEditInfo, onCh
       </div>
 
       <div className="card p-6">
-        <h2 className="font-display text-xl font-semibold">Connected account</h2>
+        <h2 className="font-display text-xl font-semibold">Your data</h2>
         <p className="muted mt-1 text-sm">Where The Number reads your income and business costs.</p>
         <div className="mt-4 flex items-center gap-3 rounded-2xl border border-zinc-800 bg-black/30 p-4">
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white text-black"><Landmark size={18} /></span>
-          <div className="min-w-0 flex-1"><div className="font-medium">Connected</div><div className="muted truncate text-xs">{source}</div></div>
-          <span className="dot shrink-0" style={{ background: "var(--green)" }} />
+          <div className="min-w-0 flex-1"><div className="font-medium">{dataKind}</div><div className="muted truncate text-xs">{source}</div></div>
+          {dataKind === "Connected" && <span className="dot shrink-0" style={{ background: "var(--green)" }} />}
         </div>
         <button className="btn btn-primary mt-4 w-full" onClick={onReconnect}><ArrowUpRight size={16} />Switch bank, Venmo or QuickBooks</button>
         <p className="muted mt-2 text-center text-xs">Takes you back to the connect step. Read-only. We never move money.</p>
